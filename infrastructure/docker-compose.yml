@@ -1,3 +1,4 @@
+name: zotero-rag-assistant
 services:
   gateway:
     build: ./gateway
@@ -19,4 +20,3 @@ services:
       - OLLAMA_BASE_URL=not-set
     expose:
       - "8000"
-

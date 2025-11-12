@@ -1,4 +1,13 @@
 services:
+  gateway:
+    build: ./gateway
+    container_name: gateway
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      - UPSTREAM_HOST=api
+      - UPSTREAM_PORT=8000
   ollama:
     image: ollama/ollama:latest
     container_name: ollama

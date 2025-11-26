@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
 

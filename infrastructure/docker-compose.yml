@@ -29,6 +29,8 @@ services:
     container_name: core
     environment:
       - OLLAMA_HOST=not-set
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
     expose:
       - "8000"
     volumes:

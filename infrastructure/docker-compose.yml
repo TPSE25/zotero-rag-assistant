@@ -5,29 +5,42 @@ services:
     container_name: gateway
     depends_on:
       - core
+      - webdav
     ports:
       - "8080:8080"
     restart: unless-stopped
     environment:
       - UPSTREAM_HOST=api
       - UPSTREAM_PORT=8000
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chroma
+    restart: unless-stopped
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+    volumes:
+      - chroma:/chroma/chroma
   core:
     build:
       context: ../
       dockerfile: ./infrastructure/core/Dockerfile
     container_name: core
+    depends_on:
+      - chroma
     environment:
       - OLLAMA_HOST=not-set
-    expose:
-      - "8000"
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
     volumes:
       - documents:/data
   webdav:
     build: webdav/
     container_name: webdav
-    expose:
-      - "8081"
+    depends_on:
+      - core
     volumes:
       - documents:/var/lib/webdav/data
 volumes:
   documents:
+  chroma:

@@ -1,7 +1,10 @@
 import os
+
+from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ollama import AsyncClient
+import chromadb
 
 app = FastAPI()
 
@@ -28,3 +31,25 @@ async def ollama_health():
         return [m.model for m in resp.models]
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Ollama unreachable: {e!s}") from e
+
+
+def _create_chroma_client() -> chromadb.ClientAPI:
+    host = os.getenv("CHROMA_HOST", "localhost")
+    port = int(os.getenv("CHROMA_PORT", "8000"))
+    return chromadb.HttpClient(host=host, port=port)
+
+def _get_or_create_chroma_collection() -> Collection:
+    chroma_client = _create_chroma_client()
+    return chroma_client.get_or_create_collection("embeddings")
+
+@app.get("/api/chroma-stats")
+async def chroma_stats():
+    try:
+        collection = _get_or_create_chroma_collection()
+        return {
+            "name": collection.name,
+            "metadata": collection.metadata,
+            "count": collection.count(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Chroma unreachable: {e!s}") from e

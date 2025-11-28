@@ -11,6 +11,17 @@ services:
     environment:
       - UPSTREAM_HOST=api
       - UPSTREAM_PORT=8000
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    container_name: chroma
+    restart: unless-stopped
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+    expose:
+      - "8000"
+    volumes:
+      - chroma:/chroma/chroma
   core:
     build:
       context: ../

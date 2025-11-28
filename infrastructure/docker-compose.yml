@@ -31,3 +31,4 @@ services:
       - documents:/var/lib/webdav/data
 volumes:
   documents:
+  chroma:

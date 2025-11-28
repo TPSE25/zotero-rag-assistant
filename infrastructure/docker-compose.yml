@@ -5,6 +5,7 @@ services:
     container_name: gateway
     depends_on:
       - core
+      - webdav
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -27,6 +28,8 @@ services:
       context: ../
       dockerfile: ./infrastructure/core/Dockerfile
     container_name: core
+    depends_on:
+      - chroma
     environment:
       - OLLAMA_HOST=not-set
       - CHROMA_HOST=chroma
@@ -38,6 +41,8 @@ services:
   webdav:
     build: webdav/
     container_name: webdav
+    depends_on:
+      - core
     expose:
       - "8081"
     volumes:

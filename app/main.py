@@ -1,4 +1,6 @@
+import logging
 import os
+import sys
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException
@@ -7,6 +9,11 @@ from ollama import AsyncClient
 import chromadb
 
 app = FastAPI()
+
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
 
 class EchoIn(BaseModel):
     message: str

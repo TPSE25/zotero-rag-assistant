@@ -15,31 +15,23 @@ logging.basicConfig(
 
 
 def extract_from_pdf(file_path_or_bytes: Union[str, bytes]) -> str:
-    """
-    Extract text from a PDF file.
-    
-    Args:
-        file_path_or_bytes (Union[str, bytes]): PDF file path or bytes.
-        
-    Returns:
-        str: Extracted text (empty string on error).
-    """
     try:
         if isinstance(file_path_or_bytes, bytes):
-            pdf_file: io.BytesIO = io.BytesIO(file_path_or_bytes)
+            pdf_file = io.BytesIO(file_path_or_bytes)  # type inferred as BytesIO
         else:
             if not os.path.exists(file_path_or_bytes):
                 logger.error(f"PDF not found: {file_path_or_bytes}")
                 return ""
-            pdf_file = file_path_or_bytes
+            pdf_file = file_path_or_bytes  # type inferred as str
 
         with pdfplumber.open(pdf_file) as pdf:
-            text: str = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
             return text
 
     except Exception as e:
         logger.error(f"Failed to extract PDF: {e}", exc_info=True)
         return ""
+
 
 
 def extract_from_zip(file_path: str) -> Dict[str, str]:

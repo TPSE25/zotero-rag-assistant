@@ -1,7 +1,7 @@
 import zipfile
 import os
 import mimetypes
-from typing import Dict, List, Union
+from typing import Dict
 import logging
 import pdfplumber
 logger = logging.getLogger(__name__)

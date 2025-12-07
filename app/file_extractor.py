@@ -1,7 +1,7 @@
 import zipfile
 import os
 import mimetypes
-from typing import Dict
+from typing import Dict,Union
 import logging
 import pdfplumber
 import io
@@ -9,7 +9,7 @@ import io
 logger = logging.getLogger(__name__)
 
 
-def extract_from_pdf(file_path_or_bytes) -> str:
+def extract_from_pdf(file_path_or_bytes:Union[str, bytes]) -> str:
     """Extract text from a PDF file (file path or bytes)."""
     try:
         if isinstance(file_path_or_bytes, bytes):

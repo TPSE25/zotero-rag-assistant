@@ -16,14 +16,20 @@ logging.basicConfig(
 
 def extract_from_pdf(file_path_or_bytes: Union[str, bytes]) -> str:
     try:
+        # Ensure pdf_file is always a BytesIO
         if isinstance(file_path_or_bytes, bytes):
-            pdf_file = io.BytesIO(file_path_or_bytes)  # type inferred as BytesIO
-        else:
+            pdf_file = BytesIO(file_path_or_bytes)
+        elif isinstance(file_path_or_bytes, str):
             if not os.path.exists(file_path_or_bytes):
                 logger.error(f"PDF not found: {file_path_or_bytes}")
                 return ""
-            pdf_file = file_path_or_bytes  # type inferred as str
+            with open(file_path_or_bytes, "rb") as f:
+                pdf_file = BytesIO(f.read())
+        else:
+            logger.error("Input must be bytes or file path string")
+            return ""
 
+        # Extract text using pdfplumber
         with pdfplumber.open(pdf_file) as pdf:
             text = "\n".join(page.extract_text() or "" for page in pdf.pages)
             return text
@@ -31,7 +37,6 @@ def extract_from_pdf(file_path_or_bytes: Union[str, bytes]) -> str:
     except Exception as e:
         logger.error(f"Failed to extract PDF: {e}", exc_info=True)
         return ""
-
 
 
 def extract_from_zip(file_path: str) -> Dict[str, str]:

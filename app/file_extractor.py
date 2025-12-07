@@ -7,21 +7,33 @@ import pdfplumber
 import io
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 
 
-def extract_from_pdf(file_path_or_bytes:Union[str, bytes]) -> str:
-    """Extract text from a PDF file (file path or bytes)."""
+def extract_from_pdf(file_path_or_bytes: Union[str, bytes]) -> str:
+    """
+    Extract text from a PDF file.
+    
+    Args:
+        file_path_or_bytes (Union[str, bytes]): PDF file path or bytes.
+        
+    Returns:
+        str: Extracted text (empty string on error).
+    """
     try:
         if isinstance(file_path_or_bytes, bytes):
-            pdf_file = io.BytesIO(file_path_or_bytes)
+            pdf_file: io.BytesIO = io.BytesIO(file_path_or_bytes)
         else:
             if not os.path.exists(file_path_or_bytes):
                 logger.error(f"PDF not found: {file_path_or_bytes}")
                 return ""
-            pdf_file = file_path_or_bytes
+            pdf_file = file_path_or_bytes  # str path
 
         with pdfplumber.open(pdf_file) as pdf:
-            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            text: str = "\n".join(page.extract_text() or "" for page in pdf.pages)
             return text
 
     except Exception as e:
@@ -30,8 +42,16 @@ def extract_from_pdf(file_path_or_bytes:Union[str, bytes]) -> str:
 
 
 def extract_from_zip(file_path: str) -> Dict[str, str]:
-    """Extract text and PDFs from a ZIP archive."""
-    texts = {}
+    """
+    Extract text files and PDFs from a ZIP archive.
+    
+    Args:
+        file_path (str): Path to ZIP file.
+        
+    Returns:
+        Dict[str, str]: Dictionary mapping filenames to extracted text.
+    """
+    texts: Dict[str, str] = {}
 
     if not os.path.exists(file_path):
         logger.error(f"ZIP file not found: {file_path}")
@@ -47,17 +67,17 @@ def extract_from_zip(file_path: str) -> Dict[str, str]:
 
                 try:
                     with zip_ref.open(file_info) as file:
-                        content_bytes = file.read()
+                        content_bytes: bytes = file.read()
 
                         if filename.endswith(".txt"):
                             try:
-                                content = content_bytes.decode("utf-8")
+                                content: str = content_bytes.decode("utf-8")
                                 texts[file_info.filename] = content
                             except UnicodeDecodeError:
                                 logger.warning(f"Skipping non-UTF8 file: {file_info.filename}")
 
                         elif filename.endswith(".pdf"):
-                            text = extract_from_pdf(content_bytes)
+                            text: str = extract_from_pdf(content_bytes)
                             texts[file_info.filename] = text
 
                         else:
@@ -76,7 +96,15 @@ def extract_from_zip(file_path: str) -> Dict[str, str]:
 
 
 def extract_auto(file_path: str) -> Dict[str, str]:
-    """Automatically detect file type (PDF or ZIP) and extract content."""
+    """
+    Automatically detect file type (PDF or ZIP) and extract content.
+    
+    Args:
+        file_path (str): Path to PDF or ZIP file.
+        
+    Returns:
+        Dict[str, str]: Dictionary mapping filenames to extracted text.
+    """
     if not os.path.exists(file_path):
         logger.error(f"File not found: {file_path}")
         return {}
@@ -87,13 +115,17 @@ def extract_auto(file_path: str) -> Dict[str, str]:
         logger.warning(f"Could not detect MIME type for: {file_path}")
         return {}
 
+    # PDF extraction
     if mime_type == 'application/pdf':
-        text = extract_from_pdf(file_path)
+        text: str = extract_from_pdf(file_path)
         return {os.path.basename(file_path): text}
 
+    # ZIP extraction
     elif mime_type == 'application/zip':
-        return extract_from_zip(file_path)
+        texts: Dict[str, str] = extract_from_zip(file_path)
+        return texts
 
+    # Unsupported file type
     else:
         logger.warning(f"Unsupported MIME type '{mime_type}' for file: {file_path}")
         return {}

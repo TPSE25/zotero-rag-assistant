@@ -5,6 +5,7 @@ import mimetypes
 import logging
 from typing import Dict, Union
 import pdfplumber
+from io import BytesIO
 
 # Configure logger
 logger = logging.getLogger(__name__)

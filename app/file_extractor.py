@@ -1,11 +1,12 @@
-import zipfile
 import os
-import mimetypes
-from typing import Dict,Union
-import logging
-import pdfplumber
 import io
+import zipfile
+import mimetypes
+import logging
+from typing import Dict, Union
+import pdfplumber
 
+# Configure logger
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +31,7 @@ def extract_from_pdf(file_path_or_bytes: Union[str, bytes]) -> str:
             if not os.path.exists(file_path_or_bytes):
                 logger.error(f"PDF not found: {file_path_or_bytes}")
                 return ""
-            pdf_file = file_path_or_bytes  # str path
+            pdf_file = file_path_or_bytes
 
         with pdfplumber.open(pdf_file) as pdf:
             text: str = "\n".join(page.extract_text() or "" for page in pdf.pages)
@@ -63,28 +64,31 @@ def extract_from_zip(file_path: str) -> Dict[str, str]:
                 if file_info.is_dir():
                     continue
 
-                filename = file_info.filename.lower()
+                filename = file_info.filename
+                filename_lower = filename.lower()
 
                 try:
                     with zip_ref.open(file_info) as file:
                         content_bytes: bytes = file.read()
 
-                        if filename.endswith(".txt"):
+                        # TXT files
+                        if filename_lower.endswith(".txt"):
                             try:
                                 content: str = content_bytes.decode("utf-8")
-                                texts[file_info.filename] = content
+                                texts[filename] = content
                             except UnicodeDecodeError:
-                                logger.warning(f"Skipping non-UTF8 file: {file_info.filename}")
+                                logger.warning(f"Skipping non-UTF8 file: {filename}")
 
-                        elif filename.endswith(".pdf"):
+                        # PDF files inside ZIP
+                        elif filename_lower.endswith(".pdf"):
                             text: str = extract_from_pdf(content_bytes)
-                            texts[file_info.filename] = text
+                            texts[filename] = text
 
                         else:
-                            logger.warning(f"Unsupported file type in ZIP: {file_info.filename}")
+                            logger.warning(f"Unsupported file type in ZIP: {filename}")
 
                 except Exception as e:
-                    logger.error(f"Error reading '{file_info.filename}' from ZIP: {e}", exc_info=True)
+                    logger.error(f"Error reading '{filename}' from ZIP: {e}", exc_info=True)
                     continue
 
     except zipfile.BadZipFile:
@@ -115,17 +119,13 @@ def extract_auto(file_path: str) -> Dict[str, str]:
         logger.warning(f"Could not detect MIME type for: {file_path}")
         return {}
 
-    # PDF extraction
     if mime_type == 'application/pdf':
         text: str = extract_from_pdf(file_path)
         return {os.path.basename(file_path): text}
 
-    # ZIP extraction
     elif mime_type == 'application/zip':
-        texts: Dict[str, str] = extract_from_zip(file_path)
-        return texts
+        return extract_from_zip(file_path)
 
-    # Unsupported file type
     else:
         logger.warning(f"Unsupported MIME type '{mime_type}' for file: {file_path}")
         return {}

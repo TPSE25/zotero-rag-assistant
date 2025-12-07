@@ -47,3 +47,5 @@ def extract_auto(file_path: str) -> Dict[str, str]:
         else:
             logging.warning(f"Unsupported MIME type: {mime_type}")
             return {}
+    logging.warning(f"Could not determine MIME type for: {file_path}")
+    return {}

@@ -39,6 +39,10 @@ services:
     container_name: webdav
     depends_on:
       - core
+    environment:
+      - PORT=8000
+      - ROOT_DIR=/var/lib/webdav/data
+      - CORE_API_URL=http://core:8000/internal/file-changed
     volumes:
       - documents:/var/lib/webdav/data
 volumes:

@@ -4,9 +4,9 @@ from wsgidav.wsgidav_app import WsgiDAVApp
 from wsgidav.dir_browser import WsgiDavDirBrowser
 from cheroot import wsgi
 
-ROOT_DIR = "/var/lib/webdav/data"
+ROOT_DIR = os.getenv("ROOT_DIR")
 CORE_API_URL = os.getenv("CORE_API_URL")
-PORT = 8081
+PORT = int(os.getenv("PORT"))
 
 if __name__ == "__main__":
     os.makedirs(ROOT_DIR, exist_ok=True)

@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { ChatMessage } from "../llm/LLMService";
 import { MockLLMService } from "../llm/MockLLMService";
 

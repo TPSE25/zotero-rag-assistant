@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, Dict, List, cast
 from app.main import _get_or_create_chroma_collection
 
 
@@ -23,12 +23,13 @@ class VectorService:
         self,
         query_embedding: List[float],
         top_k: int = 5
-    ) -> dict:
+    ) -> Dict[Any, Any]:
         collection = _get_or_create_chroma_collection()
-        return collection.query(
+        results = collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k
         )
+        return cast(Dict[Any, Any], results)
 
     def delete(self, ids: List[str]) -> None:
         collection = _get_or_create_chroma_collection()
@@ -36,18 +37,21 @@ class VectorService:
 
     def get_count(self) -> int:
         collection = _get_or_create_chroma_collection()
-        return collection.count()
+        count = collection.count()
+        return cast(int, count)
 
     def get_all_ids(self) -> List[str]:
         collection = _get_or_create_chroma_collection()
         results = collection.get(include=["ids"])
-        return results["ids"]
+        ids = results["ids"]
+        return cast(List[str], ids)
 
     def reset(self) -> None:
         collection = _get_or_create_chroma_collection()
-        all_ids = collection.get(include=["ids"])["ids"]
-        if all_ids:
-            collection.delete(ids=all_ids)
+        results = collection.get(include=["ids"])
+        ids = cast(List[str], results["ids"])
+        if ids:
+            collection.delete(ids=ids)
 
     def health_check(self) -> bool:
         try:

@@ -3,6 +3,7 @@ import logging
 from typing import List
 from ollama import AsyncClient
 
+
 class EmbeddingService:
     async def embed_text(self, text: str, model: str = "llama3.2") -> List[float]:
         """
@@ -14,7 +15,7 @@ class EmbeddingService:
 
         try:
             response = await client.embed(model=model, input=text)
-            return response.embeddings[0]
+            return list(response.embeddings[0])
         except Exception as e:
             logging.error(f"Error generating embedding for text: {e}")
             return []
@@ -31,7 +32,7 @@ class EmbeddingService:
 
         try:
             response = await client.embed(model=model, input=texts)
-            return response.embeddings
+            return [list(vec) for vec in response.embeddings]
         except Exception as e:
             logging.error(f"Error generating embeddings: {e}")
             return [[] for _ in texts]
@@ -42,7 +43,6 @@ class EmbeddingService:
         """
         Generate embeddings for a list of text chunks using Ollama API.
         """
-        # chunks == texts conceptually → reuse logic
         return await self.embed_texts(chunks, model)
 
     async def embed_health_check(self, model: str = "llama3.2") -> bool:

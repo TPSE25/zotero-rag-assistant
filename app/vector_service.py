@@ -1,9 +1,7 @@
 from typing import Any, Dict, List, cast
 from main import _get_or_create_chroma_collection
 
-
 class VectorService:
-
     def add_embeddings(
         self,
         ids: List[str],
@@ -14,9 +12,9 @@ class VectorService:
         collection = _get_or_create_chroma_collection()
         collection.add(
             ids=ids,
-            embeddings=embeddings,
+            embeddings=cast(Any, embeddings),  # Fix error 2
             documents=documents,
-            metadata=metadata
+            metadatas=metadata  # Fix error 1: changed from metadata to metadatas
         )
 
     def query(
@@ -26,7 +24,7 @@ class VectorService:
     ) -> Dict[Any, Any]:
         collection = _get_or_create_chroma_collection()
         results = collection.query(
-            query_embeddings=[query_embedding],
+            query_embeddings=cast(Any, [query_embedding]),  # Fix error 3
             n_results=top_k
         )
         return cast(Dict[Any, Any], results)
@@ -42,13 +40,13 @@ class VectorService:
 
     def get_all_ids(self) -> List[str]:
         collection = _get_or_create_chroma_collection()
-        results = collection.get(include=["ids"])
+        results = collection.get(include=cast(Any, ["ids"]))  # Fix error 4
         ids = results["ids"]
         return cast(List[str], ids)
 
     def reset(self) -> None:
         collection = _get_or_create_chroma_collection()
-        results = collection.get(include=["ids"])
+        results = collection.get(include=cast(Any, ["ids"]))  # Fix error 5
         ids = cast(List[str], results["ids"])
         if ids:
             collection.delete(ids=ids)

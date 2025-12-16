@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, cast
-from app.main import _get_or_create_chroma_collection
+from main import _get_or_create_chroma_collection
 
 
 class VectorService:

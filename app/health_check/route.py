@@ -1,21 +1,19 @@
+# route.py
 from typing import Callable
 from starlette.responses import JSONResponse
 from .service import HealthCheckFactory
 from .enum import HealthCheckStatusEnum
 
 
-def healthCheckRoute(factory: HealthCheckFactory) -> Callable:
+def healthCheckRoute(factory: HealthCheckFactory) -> Callable[[], JSONResponse]:
     """
-    This function is passed to the add_api_route with the built factory.
-
-    When called, the endpoint method within, will be called and it will run the job bound to the factory.
-    The results will be parsed and sent back to the requestor via JSON.
+    Returns a FastAPI-compatible endpoint function that runs the health check factory
+    and returns JSONResponse with status 200 if healthy, 500 if unhealthy.
     """
-    
     _factory = factory
 
     def endpoint() -> JSONResponse:
-        res = _factory.check()    
+        res: dict[str, str] = _factory.check()  # assume check() returns dict[str, str]
         if res['status'] == HealthCheckStatusEnum.UNHEALTHY.value:
             return JSONResponse(content=res, status_code=500)
         return JSONResponse(content=res, status_code=200)

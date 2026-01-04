@@ -1,14 +1,15 @@
+# service.py
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Optional
 from .model import HealthCheckModel
 
-
 class HealthCheckFactory:
-    def __init__(self):
-        self._entityStartTime: datetime = None
-        self._entityStopTime: datetime = None
-        self._totalStartTime: datetime = None
-        self._totalStopTime: datetime = None
+    def __init__(self) -> None:
+        self._entityStartTime: Optional[datetime] = None
+        self._entityStopTime: Optional[datetime] = None
+        self._totalStartTime: Optional[datetime] = None
+        self._totalStopTime: Optional[datetime] = None
 
     def __startTimer__(self, entityTimer: bool) -> None:
         if entityTimer:
@@ -22,15 +23,21 @@ class HealthCheckFactory:
         else:
             self._totalStopTime = datetime.now()
 
-    def __getTimeTaken__(self, entityTimer: bool) -> datetime:
+    def __getTimeTaken__(self, entityTimer: bool) -> Optional[timedelta]:
+        """Return elapsed time as timedelta."""
         if entityTimer:
-            return self._entityStopTime - self._entityStartTime
-        return self._totalStopTime - self._totalStartTime
+            if self._entityStartTime and self._entityStopTime:
+                return self._entityStopTime - self._entityStartTime
+            return None
+        if self._totalStartTime and self._totalStopTime:
+            return self._totalStopTime - self._totalStartTime
+        return None
 
     def __dumpModel__(self, model: HealthCheckModel) -> str:
         """Convert Python objects to JSON-friendly dicts."""
         entities_list = []
         for entity in model.entities:
+            # assuming entity.status is an Enum
             entity.status = entity.status.value
             entities_list.append(entity.dict())
         return json.dumps(entities_list)

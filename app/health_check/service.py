@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from .model import HealthCheckModel, HealthCheckEntityModel
+from .model import HealthCheckModel
 
 
 class HealthCheckFactory:

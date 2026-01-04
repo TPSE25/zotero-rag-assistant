@@ -19,3 +19,4 @@ def healthCheckRoute(factory: HealthCheckFactory) -> Callable[[], JSONResponse]:
         return JSONResponse(content=res, status_code=200)
 
     return endpoint
+

@@ -41,3 +41,22 @@ class HealthCheckFactory:
             entity.status = entity.status.value
             entities_list.append(entity.dict())
         return json.dumps(entities_list)
+        ...
+async def check(self) -> dict[str, str]:
+        """
+        Performs a health check by calling Ollama embed API.
+        Returns a dict with 'status'.
+        """
+        client = AsyncClient(base_url=self.base_url)
+
+        try:
+            # We just test a small dummy embedding
+            response = await client.embed(model=self.model, input="health check")
+            if response.embedding:
+                return {"status": HealthCheckStatusEnum.HEALTHY.value}
+            else:
+                return {"status": HealthCheckStatusEnum.UNHEALTHY.value}
+
+        except Exception as e:
+            logging.error(f"Ollama health check failed: {e}", exc_info=True)
+            return {"status": HealthCheckStatusEnum.UNHEALTHY.value}

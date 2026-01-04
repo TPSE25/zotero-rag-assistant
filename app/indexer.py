@@ -41,7 +41,6 @@ class Indexer:
     def index(self, document_paths: List[str]) -> List[DataItem]:
         items: List[DataItem] = []
         for document_path in document_paths:
-            document = self.converter.convert(document_path).document
             chunks: List[DocChunk] = self.chunker.chunk(Document(document_path))
             items.extend(self._items_from_chunks(chunks))
         return items

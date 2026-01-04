@@ -1,22 +1,20 @@
 from typing import Any, Dict, List, cast
-from app.main import _get_or_create_chroma_collection
-
+from main import _get_or_create_chroma_collection
 
 class VectorService:
-
     def add_embeddings(
         self,
         ids: List[str],
         embeddings: List[List[float]],
         documents: List[str],
-        metadata: List[dict] | None = None
+        metadata: List[Dict[str, Any]] | None = None  # Changed from List[dict]
     ) -> None:
         collection = _get_or_create_chroma_collection()
         collection.add(
             ids=ids,
-            embeddings=embeddings,
+            embeddings=cast(Any, embeddings),
             documents=documents,
-            metadata=metadata
+            metadatas=cast(Any, metadata)  # Add cast here too
         )
 
     def query(
@@ -26,7 +24,7 @@ class VectorService:
     ) -> Dict[Any, Any]:
         collection = _get_or_create_chroma_collection()
         results = collection.query(
-            query_embeddings=[query_embedding],
+            query_embeddings=cast(Any, [query_embedding]),
             n_results=top_k
         )
         return cast(Dict[Any, Any], results)
@@ -42,13 +40,13 @@ class VectorService:
 
     def get_all_ids(self) -> List[str]:
         collection = _get_or_create_chroma_collection()
-        results = collection.get(include=["ids"])
+        results = collection.get(include=cast(Any, ["ids"]))
         ids = results["ids"]
         return cast(List[str], ids)
 
     def reset(self) -> None:
         collection = _get_or_create_chroma_collection()
-        results = collection.get(include=["ids"])
+        results = collection.get(include=cast(Any, ["ids"]))
         ids = cast(List[str], results["ids"])
         if ids:
             collection.delete(ids=ids)

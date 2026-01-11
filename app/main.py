@@ -77,6 +77,7 @@ class Hit(BaseModel):
 class QueryOut(BaseModel):
     response: str
     sources: Dict[str, str]
+    raw_context: str
 
 async def get_query_hits(prompt: str, n_results: int = 5) -> List[Hit]:
     collection = _get_or_create_chroma_collection()
@@ -139,7 +140,7 @@ QUESTION:
 {body.prompt}
 """
     out = await client.generate(model="llama3.2:latest", prompt=enriched, system=SYSTEM_PROMPT)
-    return QueryOut(response=out.response, sources=sources)
+    return QueryOut(response=out.response, sources=sources, raw_context=context)
 
 @app.post("/internal/file-changed")
 async def file_changed_hook(

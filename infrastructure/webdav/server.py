@@ -8,6 +8,11 @@ ROOT_DIR = os.getenv("ROOT_DIR")
 CORE_API_URL = os.getenv("CORE_API_URL")
 PORT = int(os.getenv("PORT"))
 
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+
 if __name__ == "__main__":
     os.makedirs(ROOT_DIR, exist_ok=True)
     config = {

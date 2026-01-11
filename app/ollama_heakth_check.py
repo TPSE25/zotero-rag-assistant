@@ -26,7 +26,7 @@ class Ollamahealth:
             client = AsyncClient(
                 base_url=os.getenv("OLLAMA_API_URL", "http://localhost:11434")
             )
-            resp = await client.list()
+            await client.list()
             return True
         except Exception as e:
             print(f"Error pinging Ollama server: {e}")

@@ -1,2 +1,1 @@
-pref("enable", true);
-pref("input", "This is input");
+pref("apiBaseUrl", "http://localhost:8000");

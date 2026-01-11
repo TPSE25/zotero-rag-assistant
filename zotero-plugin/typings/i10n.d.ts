@@ -3,24 +3,14 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
-  | 'item-info-row-example-label'
-  | 'item-section-example1-head-text'
-  | 'item-section-example1-sidenav-tooltip'
-  | 'item-section-example2-button-tooltip'
-  | 'item-section-example2-head-text'
-  | 'item-section-example2-sidenav-tooltip'
-  | 'menuitem-filemenulabel'
-  | 'menuitem-label'
-  | 'menuitem-submenulabel'
-  | 'menupopup-label'
-  | 'pref-enable'
+  | 'error-prefix'
+  | 'pref-apiBaseUrl'
   | 'pref-help'
-  | 'pref-input'
-  | 'pref-title'
-  | 'prefs-table-detail'
-  | 'prefs-table-title'
   | 'prefs-title'
-  | 'startup-begin'
-  | 'startup-finish'
-  | 'tabpanel-lib-tab-label'
-  | 'tabpanel-reader-tab-label';
+  | 'querying-message'
+  | 'rag-query-button-label'
+  | 'rag-query-input-placeholder'
+  | 'rag-response-placeholder'
+  | 'rag-section-header'
+  | 'rag-section-sidenav'
+  | 'rag-sources-header';

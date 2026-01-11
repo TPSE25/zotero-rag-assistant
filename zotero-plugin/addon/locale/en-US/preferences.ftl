@@ -1,5 +1,2 @@
-pref-title = Addon Template Example
-pref-enable =
-    .label = Enable
-pref-input = Input
+pref-apiBaseUrl = API Base URL
 pref-help = { $name } Build { $version } { $time }

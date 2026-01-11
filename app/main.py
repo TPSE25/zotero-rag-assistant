@@ -4,7 +4,7 @@ import sys
 from typing import Dict, List, Any
 
 from chromadb.api.models.Collection import Collection
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, Form, File
 from pydantic import BaseModel
 from ollama import AsyncClient
 import chromadb
@@ -62,3 +62,12 @@ async def chroma_stats() -> Dict[str, Any]:
         }
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Chroma unreachable: {e!s}") from e
+
+
+@app.post("/internal/file-changed")
+async def file_changed_hook(
+        filename: str = Form(...),
+        event_type: str = Form(...),
+        file: UploadFile = File(...)
+) -> None:
+    logging.info(f"Received file change event: {filename} {event_type}")

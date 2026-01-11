@@ -1,5 +1,5 @@
 import pytest 
-from text_chunking import TextChunker
+from app.text_chunking import TextChunker
 
 def test_clean_text_removes_extra_whitespace():
     chunker = TextChunker()

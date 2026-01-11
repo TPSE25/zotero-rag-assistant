@@ -63,6 +63,33 @@ async def chroma_stats() -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Chroma unreachable: {e!s}") from e
 
+class QueryIn(BaseModel):
+    prompt: str
+
+class QueryOut(BaseModel):
+    response: str
+    sources: List[str]
+
+@app.post("/api/query")
+async def query(body: QueryIn) -> QueryOut:
+    collection = _get_or_create_chroma_collection()
+    client = _create_ollama_client()
+    response = await client.embed(model="nomic-embed-text", input=body.prompt)
+    embeddings = list(response.embeddings[0])
+    res = collection.query(
+        query_embeddings=[embeddings],
+        n_results=5,
+        include=["documents", "metadatas"],
+    )
+    docs = (res.get("documents") or [[]])[0]
+    metadatas = (res.get("metadatas") or [[]])[0]
+
+    sources = list(set(m.get("filename") for m in metadatas if m and "filename" in m))
+
+    context = "\n\n".join(docs) if docs else ""
+    enriched = f"{context}\n\n{body.prompt}" if context else body.prompt
+    out = await client.generate(model="llama3.2:latest", prompt=enriched)
+    return QueryOut(response=out.response, sources=sources)
 
 @app.post("/internal/file-changed")
 async def file_changed_hook(
@@ -71,3 +98,49 @@ async def file_changed_hook(
         file: UploadFile = File(...)
 ) -> None:
     logging.info(f"Received file change event: {filename} {event_type}")
+    collection = _get_or_create_chroma_collection()
+    client = _create_ollama_client()
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        extracted_data = extract_auto(tmp_path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    for fname, text in extracted_data.items():
+        if not text:
+            logging.info(f"No text extracted from {fname}")
+            continue
+
+        chunker = TextChunker()
+        cleaned_text = chunker.clean_text(text)
+        #chunks = chunker.chunk_text(cleaned_text)
+        chunks = [cleaned_text[i: i + 500] for i in range(0, len(cleaned_text), 500)]
+        if chunks:
+            max_chunk = max(chunks, key=len)
+            print(f"chunks: {len(chunks)}, min_size: {min(len(c) for c in chunks)}, max_size: {len(max_chunk)}, max_element: {max_chunk}")
+        else:
+            print(f"chunks: 0")
+
+        if not chunks:
+            logging.info(f"No chunks extracted from {fname}")
+            continue
+
+        response = await client.embed(model="nomic-embed-text", input=chunks)
+        embeddings = response.embeddings
+
+        ids = [f"{fname}_{i}" for i in range(len(chunks))]
+        metadatas = [{"filename": fname} for _ in range(len(chunks))]
+
+        collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            documents=chunks,
+            metadatas=metadatas
+        )
+        logging.info(f"Successfully indexed {len(chunks)} chunks for {fname}")

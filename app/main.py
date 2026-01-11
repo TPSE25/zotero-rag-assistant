@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import tempfile
 from typing import Dict, List, Any
 
 from chromadb.api.models.Collection import Collection
@@ -8,6 +9,9 @@ from fastapi import FastAPI, HTTPException, UploadFile, Form, File
 from pydantic import BaseModel
 from ollama import AsyncClient
 import chromadb
+
+from app.file_extractor import extract_auto
+from app.text_chunking import TextChunker
 
 app = FastAPI()
 
@@ -66,27 +70,36 @@ async def chroma_stats() -> Dict[str, Any]:
 class QueryIn(BaseModel):
     prompt: str
 
+class Hit(BaseModel):
+    text: str
+    filename: str
+
 class QueryOut(BaseModel):
     response: str
     sources: List[str]
 
-@app.post("/api/query")
-async def query(body: QueryIn) -> QueryOut:
+async def get_query_hits(prompt: str, n_results: int = 5) -> List[Hit]:
     collection = _get_or_create_chroma_collection()
     client = _create_ollama_client()
-    response = await client.embed(model="nomic-embed-text", input=body.prompt)
+    response = await client.embed(model="nomic-embed-text", input=prompt)
     embeddings = list(response.embeddings[0])
     res = collection.query(
         query_embeddings=[embeddings],
-        n_results=5,
+        n_results=n_results,
         include=["documents", "metadatas"],
     )
-    docs = (res.get("documents") or [[]])[0]
-    metadatas = (res.get("metadatas") or [[]])[0]
+    return [
+        Hit(text=document, filename=metadata.get("filename", "unknown"))
+        for document, metadata in zip(res["documents"][0], res["metadatas"][0])
+    ]
 
-    sources = list(set(m.get("filename") for m in metadatas if m and "filename" in m))
-
-    context = "\n\n".join(docs) if docs else ""
+@app.post("/api/query")
+async def query(body: QueryIn) -> QueryOut:
+    hits = await get_query_hits(body.prompt)
+    sources = list(set(hit.filename for hit in hits))
+    context = "\n\n".join(hit.text for hit in hits)
+    
+    client = _create_ollama_client()
     enriched = f"{context}\n\n{body.prompt}" if context else body.prompt
     out = await client.generate(model="llama3.2:latest", prompt=enriched)
     return QueryOut(response=out.response, sources=sources)

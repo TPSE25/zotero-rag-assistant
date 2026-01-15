@@ -32,10 +32,15 @@ class TextChunker:
             current_chunk.append(word)
             if self.estimate_token_count(' '.join(current_chunk)) >= max_tokens:
                 # Remove the last word to stay within limit
-                current_chunk.pop()
-                chunks.append(' '.join(current_chunk))
-                current_chunk = [word]
-
+                if len(current_chunk) > 1:
+                    current_chunk.pop()
+                    chunks.append(' '.join(current_chunk))
+                    current_chunk = [word]
+                # if single word exceeds max tokens
+                else:
+                    chunks.append(word)
+                    current_chunk = []
+                
         if current_chunk:
             chunks.append(' '.join(current_chunk))
 

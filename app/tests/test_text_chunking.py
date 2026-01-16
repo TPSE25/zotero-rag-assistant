@@ -10,8 +10,8 @@ More can be added if necessary at any time.
 # tests if the whitespace removal works
 @pytest.mark.parametrize("text, expected", [
     ("This   is \n a   test\tstring", "This is a test string"),
-    ("Hey you! \n \n What    are you \n doing   ?", "Hey you! What are you doing ?"),
-    ("   When you \n play    the Game \t of   Thrones you win or \n \n \n you die.   ", "When you play the Game of Thrones you win or you die."),
+    ("  Hey   you! \n \n What    are you   \n doing? ", "Hey you! What are you doing?"),
+    ("   When you   \n play    the Game \t of   Thrones you   win or \n \n \n you  die.   ", "When you play the Game of Thrones you win or you die."),
     ("    Nymeria    ", "Nymeria"),
     ("Jon Snow", "Jon Snow")
 ])
@@ -119,8 +119,8 @@ def test_chunk_text_no_empty_chunks(text, max_tokens):
 
 # tests if a single word is chunked correctly -- testing long words aswell as short
 @pytest.mark.parametrize("text", [
-    "dog",
-    "eierschalensollbruchstellenverursacher",
+    "Dog",
+    "Eierschalensollbruchstellenverursacher",
     "Valyria",
     "Winterfell"
     "Hi"

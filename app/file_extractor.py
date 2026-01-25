@@ -1,13 +1,14 @@
-import os
+
 import zipfile
 import mimetypes
 import logging
-from typing import Dict, Union
+import re
+from typing import Dict, Union,BinaryIO
 from pathlib import Path
-import pdfplumber
 from io import BytesIO
 
-# Configure logger
+import pdfplumber
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
@@ -15,145 +16,154 @@ logging.basicConfig(
 )
 
 
+
+
 def extract_from_pdf(file_path_or_bytes: Union[str, bytes, Path]) -> str:
-    """
-    Extract text from a PDF file.
-    
-    Args:
-        file_path_or_bytes: Path to PDF file, or bytes content
-        
-    Returns:
-        Extracted text as string, or empty string on failure
-    """
     try:
-        # Ensure pdf_file is always a BytesIO
+        # Normalize input
         if isinstance(file_path_or_bytes, bytes):
             pdf_file = BytesIO(file_path_or_bytes)
-        elif isinstance(file_path_or_bytes, (str, Path)):
-            file_path = str(file_path_or_bytes)
-            if not os.path.exists(file_path):
-                logger.error(f"PDF not found: {file_path}")
-                return ""
-            with open(file_path, "rb") as f:
-                pdf_file = BytesIO(f.read())
         else:
-            logger.error("Input must be bytes or file path string")
-            return ""
+            path = Path(file_path_or_bytes)
+            if not path.exists():
+                logger.error(f"PDF not found: {path}")
+                return ""
+            pdf_file = BytesIO(path.read_bytes())
 
-        # Extract text using pdfplumber
+        pages = []
+
         with pdfplumber.open(pdf_file) as pdf:
-            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-        
-        if not text or len(text.strip()) == 0:
-            logger.warning("PDF extraction resulted in empty text")
-        
-        return text
+            for page in pdf.pages:
+                # Skip table-heavy pages (very harmful for RAG)
+                if page.extract_tables():
+                    continue
+
+                text = page.extract_text(
+                    layout=False,
+                    x_tolerance=2,
+                    y_tolerance=2,
+                )
+
+                if text:
+                    pages.append(text)
+
+        text = "\n".join(pages)
+
+        # -------- Post-processing --------
+        # Fix hyphenated line breaks
+        text = re.sub(r"-\n(\w)", r"\1", text)
+
+        # Remove isolated page numbers
+        text = re.sub(r"\n\s*\d+\s*\n", "\n", text)
+
+        # Normalize whitespace
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        if not text.strip():
+            logger.warning("PDF extraction produced empty text")
+
+        return text.strip()
+
     except Exception as e:
         logger.error(f"Failed to extract PDF: {e}", exc_info=True)
         return ""
 
 
+
+
 def extract_from_zip(zip_path: Union[str, Path]) -> Dict[str, str]:
-    """
-    Extract all PDF and TXT files from a ZIP archive.
-    
-    Args:
-        zip_path: Path to ZIP file
-        
-    Returns:
-        Dictionary mapping filenames to extracted content
-    """
-    zip_path = str(zip_path)
-    if not os.path.exists(zip_path):
-        logger.error(f"ZIP file not found: {zip_path}")
+    zip_path = Path(zip_path)
+    if not zip_path.exists():
+        logger.error(f"ZIP not found: {zip_path}")
         return {}
-    
-    result = {}
+
+    results = {}
+
     try:
         with zipfile.ZipFile(zip_path, "r") as zipf:
             for info in zipf.infolist():
-                # Skip directories and macOS metadata
                 if info.is_dir() or info.filename.startswith("__MACOSX"):
                     continue
-                
-                filename = info.filename
-                logger.info(f"Processing file from ZIP: {filename}")
-                
-                try:
-                    with zipf.open(info) as f:
-                        if filename.lower().endswith(".pdf"):
-                            content = extract_from_pdf(f.read())
-                            result[filename] = content
-                            if not content:
-                                logger.warning(f"PDF extraction resulted in empty content: {filename}")
-                        elif filename.lower().endswith(".txt"):
-                            try:
-                                content = f.read().decode("utf-8")
-                                result[filename] = content
-                                if not content or len(content.strip()) == 0:
-                                    logger.warning(f"TXT file is empty: {filename}")
-                            except UnicodeDecodeError:
-                                logger.warning(f"UTF-8 decode failed for {filename}, trying latin-1")
-                                f.seek(0)
-                                content = f.read().decode("latin-1", errors="ignore")
-                                result[filename] = content
-                        else:
-                            logger.debug(f"Skipping unsupported file type: {filename}")
-                except Exception as e:
-                    logger.error(f"Failed to extract {filename} from ZIP: {e}", exc_info=True)
-                    result[filename] = ""
-    except zipfile.BadZipFile as e:
-        logger.error(f"Invalid ZIP file: {zip_path} - {e}")
+
+                name = info.filename
+                logger.info(f"Extracting: {name}")
+
+                with zipf.open(info) as f:
+                    if name.lower().endswith(".pdf"):
+                        results[name] = extract_from_pdf(f.read())
+                    elif name.lower().endswith(".txt"):
+                        try:
+                            results[name] = f.read().decode("utf-8")
+                        except UnicodeDecodeError:
+                            results[name] = f.read().decode("latin-1", errors="ignore")
+
     except Exception as e:
-        logger.error(f"Failed to process ZIP: {zip_path} - {e}", exc_info=True)
-    
-    return result
+        logger.error(f"Failed to process ZIP: {e}", exc_info=True)
+
+    return results
+
 
 
 def extract_auto(file_path: Union[str, Path]) -> Dict[str, str]:
-    """
-    Automatically detect file type and extract content.
-    
-    Args:
-        file_path: Path to file (PDF, ZIP, or TXT)
-        
-    Returns:
-        Dictionary mapping filenames to extracted content
-    """
-    file_path_str = str(file_path)
-    
-    if not os.path.exists(file_path_str):
-        logger.error(f"File not found: {file_path_str}")
+    file_path = Path(file_path)
+    if not file_path.exists():
+        logger.error(f"File not found: {file_path}")
         return {}
-    
-    mime_type, _ = mimetypes.guess_type(file_path_str)
-    logger.info(f"Processing file: {file_path_str} (MIME type: {mime_type})")
-    
-    if mime_type == "application/pdf":
-        content = extract_from_pdf(file_path_str)
-        return {os.path.basename(file_path_str): content}
-    
-    elif mime_type == "application/zip":
-        return extract_from_zip(file_path_str)
-    
-    elif mime_type == "text/plain":
+
+    mime, _ = mimetypes.guess_type(file_path)
+
+    if mime == "application/pdf":
+        return {file_path.name: extract_from_pdf(file_path)}
+    elif mime == "application/zip":
+        return extract_from_zip(file_path)
+    elif mime == "text/plain":
         try:
-            try:
-                with open(file_path_str, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except UnicodeDecodeError:
-                logger.warning(f"UTF-8 decode failed for {file_path_str}, trying latin-1")
-                with open(file_path_str, "r", encoding="latin-1", errors="ignore") as f:
-                    content = f.read()
-            
-            if not content or len(content.strip()) == 0:
-                logger.warning(f"TXT file is empty: {file_path_str}")
-            
-            return {os.path.basename(file_path_str): content}
-        except Exception as e:
-            logger.error(f"Failed to read TXT: {file_path_str} - {e}", exc_info=True)
-            return {}
-    
+            return {file_path.name: file_path.read_text(encoding="utf-8")}
+        except UnicodeDecodeError:
+            return {file_path.name: file_path.read_text(encoding="latin-1", errors="ignore")}
     else:
-        logger.warning(f"Unsupported MIME type '{mime_type}' for file: {file_path_str}")
+        logger.warning(f"Unsupported MIME type: {mime}")
         return {}
+
+
+HEADER_FOOTER_RE = re.compile(
+    r"""
+    ^\s*\d+\s*$|                              # page numbers
+    ACM\s+Reference\s+Format.*|               # ACM boilerplate
+    Permission\s+to\s+make\s+digital.*|       # copyright
+    ©\d{4}.*ACM.*|                            # copyright
+    """,
+    re.IGNORECASE | re.MULTILINE | re.VERBOSE,
+)
+
+
+def extract_and_clean_pdf(source: Union[str, Path, BinaryIO]) -> str:
+    text_parts = []
+
+    with pdfplumber.open(source) as pdf:
+        for page in pdf.pages:
+            raw = page.extract_text(layout=True)
+            if not raw:
+                continue
+            text_parts.append(raw)
+
+    text = "\n".join(text_parts)
+    return clean_pdf_text(text)
+
+
+def clean_pdf_text(text: str) -> str:
+    # Remove headers / footers
+    text = HEADER_FOOTER_RE.sub("", text)
+
+    # Fix hyphenated line breaks
+    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+
+    # Join broken lines (PDF column artifacts)
+    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+
+    # Normalize whitespace
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{2,}", "\n\n", text)
+
+    return text.strip()

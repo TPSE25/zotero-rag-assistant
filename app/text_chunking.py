@@ -1,14 +1,19 @@
-from typing import List
+from typing import List, Union
 import re
 
 class TextChunker:
     """Splits long text into manageable chunks for embeddings."""
 
-    def clean_text(self, text: str) -> str:
+    def clean_text(self, text: Union[str, dict]) -> str:
         """
         Normalize and clean text.
+        Accepts either a string or a dict of {filename: content}.
         Removes extra whitespace.
         """
+        # If a dict is passed, join all values into a single string
+        if isinstance(text, dict):
+            text = " ".join(text.values())
+
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
 

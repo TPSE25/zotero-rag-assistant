@@ -10,7 +10,7 @@ txt_file = TEST_FILES_DIR / "paper.txt"
 zip_file = TEST_FILES_DIR / "paper.zip"
 
 
-def test_extract_from_pdf_real():
+def test_extract_from_pdf_real()->None:
     """Test extracting text from a real PDF file."""
     result = extract_from_pdf(pdf_file)
     
@@ -35,7 +35,7 @@ def test_extract_from_pdf_real():
     assert "Notion" in result
 
 
-def test_extract_from_zip_real():
+def test_extract_from_zip_real()->None:
     """Test extracting files from the real ZIP file."""
     result = extract_from_zip(zip_file)
     
@@ -51,7 +51,7 @@ def test_extract_from_zip_real():
     assert "spreadsheet" in all_content.lower()
 
 
-def test_extract_auto_pdf_real():
+def test_extract_auto_pdf_real()->None:
     """Test extract_auto for a PDF file."""
     result = extract_auto(pdf_file)
     
@@ -66,7 +66,7 @@ def test_extract_auto_pdf_real():
     assert "ReplicatedUniqueList" in content
 
 
-def test_extract_auto_zip_real():
+def test_extract_auto_zip_real()->None:
     """Test extract_auto for a ZIP file."""
     result = extract_auto(zip_file)
     
@@ -81,7 +81,7 @@ def test_extract_auto_zip_real():
     assert "CRDT" in all_content or "crdt" in all_content.lower()
 
 
-def test_extract_auto_txt_real():
+def test_extract_auto_txt_real()->None:
     """Test extract_auto for a TXT file."""
     result = extract_auto(txt_file)
     
@@ -95,7 +95,7 @@ def test_extract_auto_txt_real():
     assert "ReplicatedUniqueList" in content or "replicateduniquelist" in content.lower()
 
 
-def test_extract_pdf_sections():
+def test_extract_pdf_sections()->None:
     """Test that major sections are extracted."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -105,7 +105,7 @@ def test_extract_pdf_sections():
     assert found >= 3
 
 
-def test_extract_pdf_technical_terms():
+def test_extract_pdf_technical_terms()->None:
     """Test key technical terms."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -116,7 +116,7 @@ def test_extract_pdf_technical_terms():
     assert found >= 5
 
 
-def test_extract_pdf_references():
+def test_extract_pdf_references()->None:
     """Test references to systems and researchers."""
     result = extract_from_pdf(pdf_file)
     
@@ -126,7 +126,7 @@ def test_extract_pdf_references():
     assert "Yanakieva" in result or "Kleppmann" in result
 
 
-def test_extract_pdf_semantic_concepts():
+def test_extract_pdf_semantic_concepts()->None:
     """Test semantic concepts."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -136,7 +136,7 @@ def test_extract_pdf_semantic_concepts():
     assert found >= 3
 
 
-def test_extract_pdf_tables_and_figures():
+def test_extract_pdf_tables_and_figures()->None:
     """Test table and figure content."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -146,7 +146,7 @@ def test_extract_pdf_tables_and_figures():
     assert "figure" in result_lower or "fig" in result_lower
 
 
-def test_extract_pdf_operations():
+def test_extract_pdf_operations()->None:
     """Test spreadsheet operations."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -158,7 +158,7 @@ def test_extract_pdf_operations():
     assert "undo" in result_lower
 
 
-def test_extract_pdf_algorithm_details():
+def test_extract_pdf_algorithm_details()->None:
     """Test algorithmic details."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -168,7 +168,7 @@ def test_extract_pdf_algorithm_details():
     assert found >= 4
 
 
-def test_extract_pdf_data_structures():
+def test_extract_pdf_data_structures()->None:
     """Test data structures."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -178,7 +178,7 @@ def test_extract_pdf_data_structures():
     assert found >= 2
 
 
-def test_extract_pdf_publication_info():
+def test_extract_pdf_publication_info()->None:
     """Test publication info."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -188,7 +188,7 @@ def test_extract_pdf_publication_info():
     assert "copyright" in result_lower
 
 
-def test_extract_pdf_content_length():
+def test_extract_pdf_content_length()->None:
     """Test content length."""
     result = extract_from_pdf(pdf_file)
     
@@ -199,7 +199,7 @@ def test_extract_pdf_content_length():
     assert word_count > 500
 
 
-def test_extract_pdf_markers_ranges():
+def test_extract_pdf_markers_ranges()->None:
     """Test marker and range concepts."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -208,7 +208,7 @@ def test_extract_pdf_markers_ranges():
     assert "range" in result_lower
 
 
-def test_extract_pdf_cell_references():
+def test_extract_pdf_cell_references()->None:
     """Test cell references."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()
@@ -216,7 +216,7 @@ def test_extract_pdf_cell_references():
     assert "cell" in result_lower or "formula" in result_lower
 
 
-def test_extract_pdf_table_operations():
+def test_extract_pdf_table_operations()->None:
     """Test table operations."""
     result = extract_from_pdf(pdf_file)
     result_lower = result.lower()

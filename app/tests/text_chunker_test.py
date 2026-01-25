@@ -11,7 +11,7 @@ txt_file = TEST_FILES_DIR / "paper.txt"
 zip_file = TEST_FILES_DIR / "paper.zip"
 
 
-def _assert_chunking_works(text, max_tokens: int = 100):
+def _assert_chunking_works(text, max_tokens: int = 100)->None:
     chunker = TextChunker()
 
     # Clean text (TextChunker now handles dicts too)
@@ -38,18 +38,18 @@ def _assert_chunking_works(text, max_tokens: int = 100):
 
 
 @pytest.mark.integration
-def test_text_chunker_pdf():
+def test_text_chunker_pdf()->None:
     pdf_result = extract_from_pdf(pdf_file)
     _assert_chunking_works(pdf_result)
 
 
 @pytest.mark.integration
-def test_text_chunker_txt():
+def test_text_chunker_txt()->None:
     txt_result = extract_auto(txt_file)
     _assert_chunking_works(txt_result)
 
 
 @pytest.mark.integration
-def test_text_chunker_zip():
+def test_text_chunker_zip()->None:
     zip_result = extract_from_zip(zip_file)
     _assert_chunking_works(zip_result)

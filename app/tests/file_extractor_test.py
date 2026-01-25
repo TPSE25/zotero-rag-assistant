@@ -1,4 +1,4 @@
-import pytest
+
 from pathlib import Path
 from app.file_extractor import extract_from_pdf, extract_from_zip, extract_auto
 

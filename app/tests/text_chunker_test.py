@@ -11,7 +11,7 @@ txt_file = TEST_FILES_DIR / "paper.txt"
 zip_file = TEST_FILES_DIR / "paper.zip"
 
 
-def _assert_chunking_works(text, max_tokens: int = 100)->None:
+def _assert_chunking_works(text: str, max_tokens: int = 100)->None:
     chunker = TextChunker()
 
     # Clean text (TextChunker now handles dicts too)

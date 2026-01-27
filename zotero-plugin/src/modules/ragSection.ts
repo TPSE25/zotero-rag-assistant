@@ -129,6 +129,7 @@ export class RagSection {
             .rag-bubble-text {
               display: block;
               white-space: pre-wrap;
+              user-select: text;
             }
         
             .rag-sources {

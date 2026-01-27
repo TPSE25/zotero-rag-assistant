@@ -8,9 +8,9 @@ export type FluentMessageId =
   | 'pref-help'
   | 'prefs-title'
   | 'querying-message'
+  | 'rag-chat-new-title'
   | 'rag-query-button-label'
   | 'rag-query-input-placeholder'
-  | 'rag-response-placeholder'
   | 'rag-section-header'
   | 'rag-section-sidenav'
   | 'rag-sources-header';

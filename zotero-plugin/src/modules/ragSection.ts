@@ -205,7 +205,7 @@ export class RagSection {
         let currentSessionId: string | null = sessions[0]?.id ?? null;
 
         if (!currentSessionId) {
-          const s = await this.chatDB.createSession(getString("rag-chat-new-title") ?? "New chat");
+          const s = await this.chatDB.createSession(getString("rag-chat-new-title"));
           sessions = [s];
           currentSessionId = s.id;
         }
@@ -286,7 +286,7 @@ export class RagSection {
 
             const header = ztoolkit.UI.createElement(body.ownerDocument!, "div");
             header.classList.add("rag-sources-header");
-            header.textContent = getString("rag-sources-header") ?? "Sources:";
+            header.textContent = getString("sources-header");
 
             const list = ztoolkit.UI.createElement(body.ownerDocument!, "div");
             list.classList.add("rag-sources-list");
@@ -345,7 +345,7 @@ export class RagSection {
           const pending = await this.chatDB!.addMessage({
             sessionId,
             role: "assistant",
-            content: getString("querying-message") ?? "Thinking…",
+            content: getString("querying-message"),
           });
           appendMessageNode(pending);
           scrollToBottom();
@@ -362,8 +362,7 @@ export class RagSection {
             await renderMessages();
           } catch (e: any) {
             await this.chatDB!.updateMessage(pending.id, {
-              content: (getString("error-prefix", { args: { message: e?.message ?? String(e) } })
-                  ?? `Error: ${e?.message ?? String(e)}`),
+              content: getString("error-prefix", { args: { message: e?.message ?? String(e) } })
             });
             await renderMessages();
           } finally {

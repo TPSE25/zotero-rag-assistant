@@ -80,6 +80,13 @@ export class RagSection {
               padding: 0 4px;
               cursor: pointer;
             }
+
+            .rag-tab:hover {
+              filter: brightness(0.95);
+            }
+            .rag-tab.is-active:hover {
+              filter: brightness(1.10);
+            }
         
             #rag-messages { 
               display: block;

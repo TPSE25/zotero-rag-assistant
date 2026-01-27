@@ -176,7 +176,7 @@ async def file_changed_hook(
             max_chunk = max(chunks, key=len)
             print(f"chunks: {len(chunks)}, min_size: {min(len(c) for c in chunks)}, max_size: {len(max_chunk)}, max_element: {max_chunk}")
         else:
-            print(f"chunks: 0")
+            print("chunks: 0")
 
         if not chunks:
             logging.info(f"No chunks extracted from {fname}")

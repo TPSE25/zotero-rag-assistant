@@ -20,23 +20,159 @@ export class RagSection {
         icon: "chrome://rag/content/icons/search.svg",
       },
       bodyXHTML: `
-          <div id="rag-root"
-               style="padding:10px; display:flex; flex-direction:column; gap:8px; height:100%;
-                      background-color: Canvas; color: CanvasText;">
-            <div id="rag-tabs-row" style="display:flex; flex-direction:row; gap:6px; align-items:center;">
-              <div id="rag-tabs"
-                   style="display:flex; flex-direction:row; gap:6px; overflow-x:auto; white-space:nowrap; flex:1;"></div>
-              <html:button id="rag-new-chat" style="display:block;">+</html:button>
+        <html:style>
+            #rag-root {
+              padding: 10px;
+              height: 100%;
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              background-color: Canvas;
+              color: CanvasText;
+            }
+        
+            #rag-tabs-row {
+              display: flex;
+              flex-direction: row;
+              gap: 6px;
+              align-items: center;
+            }
+        
+            #rag-tabs {
+              display: flex;
+              flex-direction: row;
+              gap: 6px;
+              overflow-x: auto;
+              white-space: nowrap;
+              flex: 1;
+            }
+        
+            .rag-tab {
+              display: flex;
+              flex-direction: row;
+              align-items: center;
+              gap: 6px;
+        
+              border: 1px solid GrayText;
+              border-radius: 999px;
+              padding: 3px 8px;
+        
+              background-color: ButtonFace;
+              color: ButtonText;
+        
+              cursor: pointer;
+              user-select: none;
+            }
+        
+            .rag-tab.is-active {
+              background-color: Highlight;
+              color: HighlightText;
+            }
+        
+            .rag-tab-title {
+              display: block;
+              color: inherit;
+            }
+        
+            .rag-tab-close {
+              display: block;
+              font-weight: bold;
+              padding: 0 4px;
+              cursor: pointer;
+            }
+        
+            #rag-messages { 
+              display: block;
+              flex: 1;
+              overflow: auto;
+              padding: 8px;
+        
+              background-color: Canvas;
+              color: CanvasText;
+        
+              /* border: 1px solid GrayText;
+              border-radius: 6px; */
+            }
+        
+            .rag-msg-row {
+              display: flex;
+              flex-direction: row;
+              margin: 6px 0;
+            }
+            .rag-msg-row.is-user { justify-content: flex-end; }
+            .rag-msg-row.is-assistant { justify-content: flex-start; }
+        
+            .rag-bubble {
+              display: block;
+              max-width: 85%;
+              border: 1px solid GrayText;
+              border-radius: 10px;
+              padding: 8px;
+              white-space: pre-wrap;
+        
+              background-color: Canvas;
+              color: CanvasText;
+            }
+        
+            .rag-bubble.is-user {
+              background-color: ButtonFace;
+              color: ButtonText;
+            }
+        
+            .rag-bubble-text {
+              display: block;
+              white-space: pre-wrap;
+            }
+        
+            .rag-sources {
+              display: block;
+              margin-top: 8px;
+              font-size: 0.9em;
+              padding-top: 6px;
+              border-top: 1px solid GrayText;
+            }
+        
+            .rag-sources-header {
+              display: block;
+              font-weight: bold;
+            }
+        
+            .rag-sources-list {
+              display: block;
+            }
+        
+            .rag-sources-line {
+              display: block;
+              white-space: pre-wrap;
+            }
+        
+            #rag-input-row {
+              display: flex;
+              flex-direction: row;
+              gap: 6px;
+              align-items: flex-end;
+            }
+        
+            #rag-query-input {
+              display: block;
+              flex: 1;
+            }
+        
+            #rag-new-chat, #rag-query-button {
+              display: block;
+            }
+          </html:style>
+          <div id="rag-root">
+            <div id="rag-tabs-row">
+              <div id="rag-tabs"></div>
+              <html:button id="rag-new-chat">+</html:button>
             </div>
-
-            <div id="rag-messages"
-                 style="display:block; flex:1; overflow:auto; padding:8px;
-                        background-color: Canvas; color: CanvasText;">
-            </div>
-
-            <div id="rag-input-row" style="display:flex; flex-direction:row; gap:6px; align-items:flex-end;">
-              <html:input id="rag-query-input" type="text" style="display:block; flex:1;" data-l10n-id="rag-query-input-placeholder"/>
-              <html:button id="rag-query-button" style="display:block;" data-l10n-id="rag-query-button-label">Ask</html:button>
+        
+            <div id="rag-messages"></div>
+        
+            <div id="rag-input-row">
+              <html:input id="rag-query-input" type="text" data-l10n-id="rag-query-input-placeholder"/>
+              <html:button id="rag-query-button" data-l10n-id="rag-query-button-label">Ask</html:button>
             </div>
           </div>
       `,
@@ -73,33 +209,16 @@ export class RagSection {
           tabsEl.innerHTML = "";
           sessions.forEach((s) => {
             const tab = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-            tab.style.display = "flex";
-            tab.style.flexDirection = "row";
-            tab.style.alignItems = "center";
-            tab.style.gap = "6px";
-            tab.style.border = "1px solid GrayText";
-            tab.style.borderRadius = "999px";
-            tab.style.padding = "3px 8px";
-
-            if (s.id === currentSessionId) {
-              tab.style.backgroundColor = "Highlight";
-              tab.style.color = "HighlightText";
-            } else {
-              tab.style.backgroundColor = "ButtonFace";
-              tab.style.color = "ButtonText";
-            }
+            tab.classList.add("rag-tab");
+            if (s.id === currentSessionId) tab.classList.add("is-active");
 
             const title = ztoolkit.UI.createElement(body.ownerDocument!, "span");
-            title.style.display = "block";
-            title.style.color = "inherit";
+            title.classList.add("rag-tab-title");
             title.textContent = s.title || "Chat";
 
             const close = ztoolkit.UI.createElement(body.ownerDocument!, "span");
-            close.style.display = "block";
+            close.classList.add("rag-tab-close");
             close.textContent = "×";
-            close.style.fontWeight = "bold";
-            close.style.padding = "0 4px";
-            close.style.cursor = "pointer";
             close.title = "Close";
 
             close.onclick = async (ev) => {
@@ -141,53 +260,32 @@ export class RagSection {
 
         const appendMessageNode = (m: ChatMessage) => {
           const row = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-          row.style.display = "flex";
-          row.style.flexDirection = "row";
-          row.style.justifyContent = m.role === "user" ? "flex-end" : "flex-start";
-          row.style.margin = "6px 0";
+          row.classList.add("rag-msg-row");
+          row.classList.add(m.role === "user" ? "is-user" : "is-assistant");
 
           const bubble = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-          bubble.style.display = "block";
-          bubble.style.maxWidth = "85%";
-          bubble.style.border = "1px solid GrayText";
-          bubble.style.borderRadius = "10px";
-          bubble.style.padding = "8px";
-          bubble.style.whiteSpace = "pre-wrap";
-          if (m.role === "user") {
-            bubble.style.backgroundColor = "ButtonFace";
-             bubble.style.color = "ButtonText";
-          } else {
-            bubble.style.backgroundColor = "Canvas";
-            bubble.style.color = "CanvasText";
-          }
+          bubble.classList.add("rag-bubble");
+          if (m.role === "user") bubble.classList.add("is-user");
 
           const text = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-          text.style.display = "block";
-          text.style.whiteSpace = "pre-wrap";
+          text.classList.add("rag-bubble-text");
           text.textContent = m.content;
-
           bubble.appendChild(text);
 
           if (m.role === "assistant" && m.sources && Object.keys(m.sources).length) {
             const sourcesWrap = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-            sourcesWrap.style.display = "block";
-            sourcesWrap.style.marginTop = "8px";
-            sourcesWrap.style.fontSize = "0.9em";
-            sourcesWrap.style.paddingTop = "6px";
-            sourcesWrap.style.borderTop = "1px solid GrayText";
+            sourcesWrap.classList.add("rag-sources");
 
             const header = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-            header.style.display = "block";
-            header.style.fontWeight = "bold";
+            header.classList.add("rag-sources-header");
             header.textContent = getString("rag-sources-header") ?? "Sources:";
 
             const list = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-            list.style.display = "block";
+            list.classList.add("rag-sources-list");
 
             for (const k of Object.keys(m.sources)) {
               const line = ztoolkit.UI.createElement(body.ownerDocument!, "div");
-              line.style.display = "block";
-              line.style.whiteSpace = "pre-wrap";
+              line.classList.add("rag-sources-line");
               line.textContent = `${k}: ${m.sources[k]}`;
               list.appendChild(line);
             }

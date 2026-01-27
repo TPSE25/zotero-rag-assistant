@@ -1,1 +1,1 @@
-pref("apiBaseUrl", "http://localhost:8000");
+pref("apiBaseUrl", "http://localhost:8080");

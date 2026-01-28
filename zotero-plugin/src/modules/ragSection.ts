@@ -87,6 +87,10 @@ export class RagSection {
             .rag-tab-title {
               display: block;
               color: inherit;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              max-width: 130px;
             }
         
             .rag-tab-close {

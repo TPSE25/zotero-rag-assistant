@@ -11,7 +11,7 @@ export interface QueryOut {
 
 export class RagClient {
   private get baseUrl(): string {
-    return getPref("apiBaseUrl" as any) || "http://localhost:8000";
+    return getPref("apiBaseUrl" as any) || "http://localhost:8080";
   }
 
   public async query(prompt: string): Promise<QueryOut> {

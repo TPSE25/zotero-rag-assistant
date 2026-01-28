@@ -20,16 +20,9 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
-class EchoIn(BaseModel):
-    message: str
-
 @app.get("/api/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok"}
-
-@app.post("/api/echo")
-async def echo(body: EchoIn) -> Dict[str, str]:
-    return {"you_said": body.message}
 
 
 def _create_ollama_client() -> AsyncClient:

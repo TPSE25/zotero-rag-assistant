@@ -1,3 +1,5 @@
+import { Source } from "./ragClient";
+
 export type ChatRole = "user" | "assistant";
 
 export interface ChatSession {
@@ -12,7 +14,7 @@ export interface ChatMessage {
     role: ChatRole;
     content: string;
     createdAt: number;
-    sources?: Record<string, string>;
+    sources?: Source[];
 }
 
 function gen_uid(): string {

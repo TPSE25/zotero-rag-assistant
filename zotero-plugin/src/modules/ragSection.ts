@@ -181,16 +181,30 @@ export class RagSection {
               display: flex;
               flex-direction: row;
               gap: 6px;
-              align-items: flex-end;
+              align-items: center;
             }
         
             #rag-query-input {
               display: block;
               flex: 1;
+              line-height: 28px;
+              padding: 0 8px;
             }
-        
-            #rag-new-chat, #rag-query-button {
-              display: block;
+
+            #rag-query-input,
+            #rag-query-button,
+            #rag-new-chat {
+              box-sizing: border-box;
+              height: 28px;
+              padding: 0 10px;
+            }
+
+            #rag-query-button,
+            #rag-new-chat {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 0 12px;
             }
           </html:style>
           <div id="rag-root">

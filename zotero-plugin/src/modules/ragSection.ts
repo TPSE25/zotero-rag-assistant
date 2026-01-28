@@ -228,6 +228,7 @@ export class RagSection {
             const title = ztoolkit.UI.createElement(body.ownerDocument!, "span");
             title.classList.add("rag-tab-title");
             title.textContent = s.title || "Chat";
+            tab.title = s.title || "Chat";
 
             const close = ztoolkit.UI.createElement(body.ownerDocument!, "span");
             close.classList.add("rag-tab-close");

@@ -179,7 +179,8 @@ async def file_changed_hook(
         embeddings = response.embeddings
 
         ids = [f"{fname}_{i}" for i in range(len(chunks))]
-        metadatas = [{"filename": fname} for _ in range(len(chunks))]
+        zotero_id = os.path.splitext(os.path.basename(filename))[0]
+        metadatas = [{"filename": fname, "zotero_id": zotero_id} for _ in range(len(chunks))]
 
         collection.add(
             ids=ids,

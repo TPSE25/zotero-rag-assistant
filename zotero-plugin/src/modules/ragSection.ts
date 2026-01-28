@@ -30,25 +30,39 @@ export class RagSection {
               gap: 8px;
               background-color: Canvas;
               color: CanvasText;
+              min-width: 0;
             }
         
             #rag-tabs-row {
-              display: flex;
-              flex-direction: row;
-              gap: 6px;
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) auto;
+              column-gap: 6px;
               align-items: center;
+
+              width: 100%;
+              max-width: 100%;
+              min-width: 0;
+              overflow: hidden;
             }
         
             #rag-tabs {
               display: flex;
               flex-direction: row;
               gap: 6px;
+              min-width: 0;
+              max-width: 100%;
               overflow-x: auto;
+              overflow-y: hidden;
               white-space: nowrap;
-              flex: 1;
+            }
+
+            #rag-new-chat {
+              flex: 0 0 auto;
+              justify-self: end;
             }
         
             .rag-tab {
+              flex: 0 0 auto;
               display: flex;
               flex-direction: row;
               align-items: center;

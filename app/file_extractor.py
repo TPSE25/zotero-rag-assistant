@@ -3,7 +3,7 @@ import zipfile
 import mimetypes
 import logging
 import re
-from typing import Dict, Union, BinaryIO
+from typing import Dict, Union
 from pathlib import Path
 from io import BytesIO
 

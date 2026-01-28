@@ -285,7 +285,7 @@ export class RagSection {
           text.textContent = m.content;
           bubble.appendChild(text);
 
-          if (m.role === "assistant" && m.sources && Object.keys(m.sources).length) {
+          if (m.role === "assistant" && m.sources && m.sources.length) {
             const sourcesWrap = ztoolkit.UI.createElement(body.ownerDocument!, "div");
             sourcesWrap.classList.add("rag-sources");
 

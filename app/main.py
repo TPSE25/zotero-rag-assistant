@@ -2,11 +2,11 @@ import logging
 import os
 import sys
 import tempfile
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Literal
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, UploadFile, Form, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ollama import AsyncClient
 import chromadb
 
@@ -66,10 +66,16 @@ class QueryIn(BaseModel):
 class Hit(BaseModel):
     text: str
     filename: str
+    zotero_id: str
+
+class Source(BaseModel):
+    id: str
+    filename: str
+    zotero_id: str
 
 class QueryOut(BaseModel):
     response: str
-    sources: Dict[str, str]
+    sources: List[Source]
     raw_context: str
 
 async def get_query_hits(prompt: str, n_results: int = 5) -> List[Hit]:
@@ -83,22 +89,28 @@ async def get_query_hits(prompt: str, n_results: int = 5) -> List[Hit]:
         include=["documents", "metadatas"],
     )
     return [
-        Hit(text=document, filename=metadata.get("filename", "unknown"))
+        Hit(
+            text=document,
+            filename=metadata.get("filename", "unknown"),
+            zotero_id=metadata.get("zotero_id", "unknown")
+        )
         for document, metadata in zip(res["documents"][0], res["metadatas"][0])
     ]
 
-def format_sources_by_file(hits: List[Hit]) -> Tuple[str, Dict[str, str]]:
-    by_file: Dict[str, List[str]] = {}
+def format_sources_by_file(hits: List[Hit]) -> Tuple[str, List[Source]]:
+    by_file: Dict[str, Tuple[str, List[str]]] = {}
 
     for hit in hits:
-        by_file.setdefault(hit.filename, []).append(hit.text.strip())
+        if hit.filename not in by_file:
+            by_file[hit.filename] = (hit.zotero_id, [])
+        by_file[hit.filename][1].append(hit.text.strip())
 
     blocks: List[str] = []
-    sources: Dict[str, str] = {}
+    sources: List[Source] = []
 
-    for i, (filename, excerpts) in enumerate(by_file.items(), start=1):
+    for i, (filename, (zotero_id, excerpts)) in enumerate(by_file.items(), start=1):
         sid = f"S{i}"
-        sources[sid] = filename
+        sources.append(Source(id=sid, filename=filename, zotero_id=zotero_id))
 
         combined = "\n\n---\n\n".join(excerpts)
         blocks.append(
@@ -179,7 +191,8 @@ async def file_changed_hook(
         embeddings = response.embeddings
 
         ids = [f"{fname}_{i}" for i in range(len(chunks))]
-        metadatas = [{"filename": fname} for _ in range(len(chunks))]
+        zotero_id = os.path.splitext(os.path.basename(filename))[0]
+        metadatas = [{"filename": fname, "zotero_id": zotero_id} for _ in range(len(chunks))]
 
         collection.add(
             ids=ids,

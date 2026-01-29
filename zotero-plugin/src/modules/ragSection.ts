@@ -1,6 +1,7 @@
 import { RagClient } from "./ragClient";
 import { getString } from "../utils/locale";
 import { ChatDB, ChatMessage, ChatSession } from "./ragStorage";
+import { showZoteroSource } from "./openSource";
 
 export class RagSection {
   private static ragClient = new RagClient();
@@ -152,6 +153,10 @@ export class RagSection {
             .rag-sources-line {
               display: block;
               white-space: pre-wrap;
+              cursor: pointer;
+            }
+            .rag-sources-line:hover {
+              text-decoration: underline;
             }
         
             #rag-input-row {
@@ -280,7 +285,7 @@ export class RagSection {
           text.textContent = m.content;
           bubble.appendChild(text);
 
-          if (m.role === "assistant" && m.sources && Object.keys(m.sources).length) {
+          if (m.role === "assistant" && m.sources && m.sources.length) {
             const sourcesWrap = ztoolkit.UI.createElement(body.ownerDocument!, "div");
             sourcesWrap.classList.add("rag-sources");
 
@@ -291,10 +296,24 @@ export class RagSection {
             const list = ztoolkit.UI.createElement(body.ownerDocument!, "div");
             list.classList.add("rag-sources-list");
 
-            for (const k of Object.keys(m.sources)) {
+            for (const source of m.sources) {
               const line = ztoolkit.UI.createElement(body.ownerDocument!, "div");
               line.classList.add("rag-sources-line");
-              line.textContent = `${k}: ${m.sources[k]}`;
+              line.onclick = async () => {
+                try {
+                  await showZoteroSource(source.zotero_id, false);
+                } catch (e: any) {
+                  Zotero.logError?.(e);
+                }
+              };
+              line.ondblclick = async () => {
+                try {
+                  await showZoteroSource(source.zotero_id, true);
+                } catch (e: any) {
+                  Zotero.logError?.(e);
+                }
+              };
+              line.textContent = `${source.id}: ${source.filename}`;
               list.appendChild(line);
             }
 

@@ -4,9 +4,15 @@ export interface QueryIn {
   prompt: string;
 }
 
+export interface Source {
+  id: string;
+  filename: string;
+  zotero_id: string;
+}
+
 export interface QueryOut {
   response: string;
-  sources: Record<string, string>;
+  sources: Source[];
 }
 
 export class RagClient {

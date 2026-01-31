@@ -8,13 +8,12 @@ class TextChunker:
         """
         Normalize and clean text.
         Accepts either a string or a dict of {filename: content}.
-        Removes extra whitespace and line number artifacts.
+        Removes extra whitespace.
         """
         if isinstance(text, dict):
             text = " ".join(text.values())
-        # Remove line numbers pattern (number followed by space and number)
-        text = re.sub(r'\b\d+\s+\d+\b', ' ', text)
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
     
     def estimate_token_count(self, text: str) -> int:

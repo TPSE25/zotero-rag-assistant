@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 import tempfile
-from typing import Dict, List, Any, Tuple, Literal
+from typing import Dict, List, Any, Tuple
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, UploadFile, Form, File

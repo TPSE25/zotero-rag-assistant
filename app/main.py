@@ -180,13 +180,7 @@ async def file_changed_hook(
 
         chunker = TextChunker()
         cleaned_text = chunker.clean_text(text)
-        #chunks = chunker.chunk_text(cleaned_text)
-        chunks = [cleaned_text[i: i + 500] for i in range(0, len(cleaned_text), 500)]
-        if chunks:
-            max_chunk = max(chunks, key=len)
-            print(f"chunks: {len(chunks)}, min_size: {min(len(c) for c in chunks)}, max_size: {len(max_chunk)}, max_element: {max_chunk}")
-        else:
-            print("chunks: 0")
+        chunks = chunker.chunk_text(cleaned_text)
 
         if not chunks:
             logging.info(f"No chunks extracted from {fname}")

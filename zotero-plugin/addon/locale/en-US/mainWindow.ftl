@@ -3,3 +3,6 @@ rag-section-header =
 
 rag-section-sidenav =
     .tooltiptext = RAG Assistant
+
+rag-query-input-placeholder =
+    .placeholder = Ask a question...

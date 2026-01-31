@@ -30,25 +30,39 @@ export class RagSection {
               gap: 8px;
               background-color: Canvas;
               color: CanvasText;
+              min-width: 0;
             }
         
             #rag-tabs-row {
-              display: flex;
-              flex-direction: row;
-              gap: 6px;
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) auto;
+              column-gap: 6px;
               align-items: center;
+
+              width: 100%;
+              max-width: 100%;
+              min-width: 0;
+              overflow: hidden;
             }
         
             #rag-tabs {
               display: flex;
               flex-direction: row;
               gap: 6px;
+              min-width: 0;
+              max-width: 100%;
               overflow-x: auto;
+              overflow-y: hidden;
               white-space: nowrap;
-              flex: 1;
+            }
+
+            #rag-new-chat {
+              flex: 0 0 auto;
+              justify-self: end;
             }
         
             .rag-tab {
+              flex: 0 0 auto;
               display: flex;
               flex-direction: row;
               align-items: center;
@@ -73,6 +87,10 @@ export class RagSection {
             .rag-tab-title {
               display: block;
               color: inherit;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              max-width: 130px;
             }
         
             .rag-tab-close {
@@ -163,16 +181,30 @@ export class RagSection {
               display: flex;
               flex-direction: row;
               gap: 6px;
-              align-items: flex-end;
+              align-items: center;
             }
         
             #rag-query-input {
               display: block;
               flex: 1;
+              line-height: 28px;
+              padding: 0 8px;
             }
-        
-            #rag-new-chat, #rag-query-button {
-              display: block;
+
+            #rag-query-input,
+            #rag-query-button,
+            #rag-new-chat {
+              box-sizing: border-box;
+              height: 28px;
+              padding: 0 10px;
+            }
+
+            #rag-query-button,
+            #rag-new-chat {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 0 12px;
             }
           </html:style>
           <div id="rag-root">
@@ -228,6 +260,7 @@ export class RagSection {
             const title = ztoolkit.UI.createElement(body.ownerDocument!, "span");
             title.classList.add("rag-tab-title");
             title.textContent = s.title || "Chat";
+            tab.title = s.title || "Chat";
 
             const close = ztoolkit.UI.createElement(body.ownerDocument!, "span");
             close.classList.add("rag-tab-close");

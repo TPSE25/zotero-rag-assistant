@@ -1,6 +1,7 @@
 import { RagSection } from "./modules/ragSection";
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
+import {registerReaderToolbarButton, unregisterReaderToolbarButton} from "./modules/readerToolbar";
 
 async function onStartup() {
   await Promise.all([
@@ -18,6 +19,7 @@ async function onStartup() {
     image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`,
   });
   RagSection.register();
+  registerReaderToolbarButton();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -29,7 +31,6 @@ async function onStartup() {
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
-  // Create ztoolkit for every window
   addon.data.ztoolkit = createZToolkit();
 
   win.MozXULElement.insertFTLIfNeeded(
@@ -44,6 +45,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 
 function onShutdown(): void {
   ztoolkit.unregisterAll();
+  unregisterReaderToolbarButton()
   addon.data.dialog?.window?.close();
   // Remove addon object
   addon.data.alive = false;

@@ -168,6 +168,9 @@ async def file_changed_hook(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+    zotero_id = os.path.splitext(os.path.basename(filename))[0]
+    collection.delete(where={"zotero_id": zotero_id})
+
     for fname, text in extracted_data.items():
         if not text:
             logging.info(f"No text extracted from {fname}")
@@ -191,7 +194,6 @@ async def file_changed_hook(
         embeddings = response.embeddings
 
         ids = [f"{fname}_{i}" for i in range(len(chunks))]
-        zotero_id = os.path.splitext(os.path.basename(filename))[0]
         metadatas = [{"filename": fname, "zotero_id": zotero_id} for _ in range(len(chunks))]
 
         collection.add(

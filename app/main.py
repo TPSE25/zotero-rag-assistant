@@ -125,8 +125,8 @@ def format_sources_by_file(hits: List[Hit]) -> Tuple[str, List[Source]]:
 SYSTEM_PROMPT = """You are ZoteroChat, a research assistant for a Zotero library.
 
 You will receive:
-- SOURCES: excerpts from the user's Zotero documents, each labeled with a source ID like [S1].
 - QUESTION: the user's question.
+- SOURCES: excerpts from the user's Zotero documents, each labeled with a source ID like [S1].
 
 Rules:
 1) Use SOURCES as the primary evidence. If the answer is not supported by SOURCES, say so clearly.
@@ -141,11 +141,11 @@ async def query(body: QueryIn) -> QueryOut:
     hits = await get_query_hits(body.prompt)
     context, sources = format_sources_by_file(hits)
     client = _create_ollama_client()
-    enriched = f"""SOURCES:
-{context}
-
-QUESTION:
+    enriched = f"""QUESTION:
 {body.prompt}
+
+SOURCES:
+{context}
 """
     out = await client.generate(model="llama3.2:latest", prompt=enriched, system=SYSTEM_PROMPT)
     return QueryOut(response=out.response, sources=sources, raw_context=context)

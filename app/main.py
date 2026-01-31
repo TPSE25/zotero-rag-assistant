@@ -201,3 +201,38 @@ async def file_changed_hook(
             metadatas=metadatas
         )
         logging.info(f"Successfully indexed {len(chunks)} chunks for {fname}")
+
+class RagPdfMatch(BaseModel):
+    id: str
+    pageIndex: int = Field(ge=0)
+    rects: List[List[float]]
+
+class AnnotationsResponse(BaseModel):
+    matches: List[RagPdfMatch]
+
+class RagHighlightRule(BaseModel):
+    id: str
+    termsRaw: str
+
+class RagPopupConfig(BaseModel):
+    rules: list[RagHighlightRule]
+
+@app.post("/api/annotations", response_model=AnnotationsResponse)
+async def annotations(
+    file: UploadFile = File(...),
+    config: str = Form(...),
+) -> AnnotationsResponse:
+    cfg = RagPopupConfig.model_validate_json(config)
+    if not cfg.rules:
+        return AnnotationsResponse(matches=[])
+    return AnnotationsResponse(
+        matches=[
+            RagPdfMatch(
+                pageIndex=cfg.rules[0].id,
+                rects=[
+                    [72.0, 120.0, 260.0, 138.0],
+                    [72.0, 145.0, 310.0, 163.0],
+                ],
+            )
+        ]
+    )

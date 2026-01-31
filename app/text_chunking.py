@@ -25,7 +25,7 @@ class TextChunker:
         words = text.split()
         return int(len(words) / 0.75)
     
-    def chunk_text(self, text: str, max_tokens: int = 512, overlap_tokens: int = 50) -> List[str]:
+    def chunk_text(self, text: str, max_tokens: int = 800, overlap_tokens: int = 50) -> List[str]:
         """
         Split text into chunks respecting sentence boundaries.
         Adds overlap for better context continuity in RAG retrieval.

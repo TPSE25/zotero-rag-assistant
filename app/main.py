@@ -2,7 +2,9 @@ import logging
 import os
 import sys
 import tempfile
-from typing import Dict, List, Any, Tuple, Literal
+from typing import Dict, List, Any, Tuple, Literal,Optional,Callable
+from app.text_place_recognition_pdf import TextPlaceRecognitionPDF
+
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, UploadFile, Form, File
@@ -207,15 +209,25 @@ class RagPdfMatch(BaseModel):
     pageIndex: int = Field(ge=0)
     rects: List[List[float]]
 
+ 
+
 class AnnotationsResponse(BaseModel):
     matches: List[RagPdfMatch]
+
+   
+
 
 class RagHighlightRule(BaseModel):
     id: str
     termsRaw: str
 
+    
+
+    
+
 class RagPopupConfig(BaseModel):
     rules: list[RagHighlightRule]
+    
 
 @app.post("/api/annotations", response_model=AnnotationsResponse)
 async def annotations(
@@ -225,15 +237,29 @@ async def annotations(
     cfg = RagPopupConfig.model_validate_json(config)
     if not cfg.rules:
         return AnnotationsResponse(matches=[])
-    return AnnotationsResponse(
-        matches=[
-            RagPdfMatch(
-                id=cfg.rules[0].id,
-                pageIndex=0,
-                rects=[
-                    [72.0, 120.0, 260.0, 138.0],
-                    [72.0, 145.0, 310.0, 163.0],
-                ],
+    if not cfg.rules:
+        return AnnotationsResponse(matches=[])
+
+    # Save the uploaded file temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    # Run place recognizer
+    recognizer = TextPlaceRecognitionPDF(tmp_path)
+    places = recognizer.process_pdf()  # returns list of dicts with id, place, page, rects
+
+    matches = []
+    for place in places:
+        # Filter by the first rule's term (simple substring match)
+        rule_term = cfg.rules[0].termsRaw
+        if rule_term.lower() in place["place"].lower():
+            matches.append(
+                RagPdfMatch(
+                    id=place["id"],
+                    pageIndex=place["page"],
+                    rects=place["rects"]
+                )
             )
-        ]
-    )
+
+    return AnnotationsResponse(matches=matches)

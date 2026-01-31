@@ -67,6 +67,7 @@ class Hit(BaseModel):
     text: str
     filename: str
     zotero_id: str
+    chunk_index: int
 
 class Source(BaseModel):
     id: str
@@ -92,7 +93,8 @@ async def get_query_hits(prompt: str, n_results: int = 5) -> List[Hit]:
         Hit(
             text=document,
             filename=metadata.get("filename", "unknown"),
-            zotero_id=metadata.get("zotero_id", "unknown")
+            zotero_id=metadata.get("zotero_id", "unknown"),
+            chunk_index=metadata.get("chunk_index")
         )
         for document, metadata in zip(res["documents"][0], res["metadatas"][0])
     ]
@@ -193,8 +195,12 @@ async def file_changed_hook(
         response = await client.embed(model="nomic-embed-text", input=chunks)
         embeddings = response.embeddings
 
-        ids = [f"{fname}_{i}" for i in range(len(chunks))]
-        metadatas = [{"filename": fname, "zotero_id": zotero_id} for _ in range(len(chunks))]
+        ids = [f"{zotero_id}_{fname}_{i}" for i in range(len(chunks))]
+        metadatas = [{
+            "filename": fname,
+            "zotero_id": zotero_id,
+            "chunk_index": i,
+        } for i in range(len(chunks))]
 
         collection.add(
             ids=ids,

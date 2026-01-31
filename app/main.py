@@ -79,7 +79,7 @@ class QueryOut(BaseModel):
     sources: List[Source]
     raw_context: str
 
-async def get_query_hits(prompt: str, n_results: int = 5) -> List[Hit]:
+async def get_query_hits(prompt: str, n_results: int = 20) -> List[Hit]:
     collection = _get_or_create_chroma_collection()
     client = _create_ollama_client()
     response = await client.embed(model="nomic-embed-text", input=prompt)

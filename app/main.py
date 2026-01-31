@@ -203,6 +203,7 @@ async def file_changed_hook(
         logging.info(f"Successfully indexed {len(chunks)} chunks for {fname}")
 
 class RagPdfMatch(BaseModel):
+    id: str
     pageIndex: int = Field(ge=0)
     rects: List[List[float]]
 
@@ -211,7 +212,6 @@ class AnnotationsResponse(BaseModel):
 
 class RagHighlightRule(BaseModel):
     id: str
-    colorHex: str
     termsRaw: str
 
 class RagPopupConfig(BaseModel):
@@ -223,10 +223,12 @@ async def annotations(
     config: str = Form(...),
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
+    if not cfg.rules:
+        return AnnotationsResponse(matches=[])
     return AnnotationsResponse(
         matches=[
             RagPdfMatch(
-                pageIndex=0,
+                pageIndex=cfg.rules[0].id,
                 rects=[
                     [72.0, 120.0, 260.0, 138.0],
                     [72.0, 145.0, 310.0, 163.0],

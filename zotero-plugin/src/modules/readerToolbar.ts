@@ -1,4 +1,5 @@
 import randomString = Zotero.randomString;
+import {RagConfig} from "./ragClient";
 
 type RagHighlightRule = {
     id: string;
@@ -7,7 +8,7 @@ type RagHighlightRule = {
     termsRaw: string;
 };
 
-type RagPopupConfig = {
+export type RagPopupConfig = {
     rules: RagHighlightRule[];
 };
 
@@ -217,7 +218,7 @@ function readUiIntoConfig(popup: HTMLDivElement) {
     popupCfg = { rules };
 }
 
-function ensurePopup(doc: Document): HTMLDivElement {
+function ensurePopup(doc: Document, reader: any): HTMLDivElement {
     const existing = doc.getElementById("rag-highlight-popup");
     if (existing) return existing as HTMLDivElement;
 
@@ -289,8 +290,37 @@ function ensurePopup(doc: Document): HTMLDivElement {
         saveCfgToPrefs(popupCfg);
         close();
     });
-    popup.querySelector("#rag-execute")!.addEventListener("click", () => {
+    popup.querySelector("#rag-execute")!.addEventListener("click", async () => {
+        const executeBtn = popup.querySelector<HTMLButtonElement>("#rag-execute")!;
+        const oldLabel = executeBtn.textContent ?? "Execute";
 
+        try {
+            executeBtn.disabled = true;
+            executeBtn.textContent = "Working…";
+
+            readUiIntoConfig(popup);
+            saveCfgToPrefs(popupCfg);
+
+            const { RagClient } = await import("./ragClient");
+            const { readCurrentPdf, createHighlightsFromAnalyzeResponse } = await import("./ragZoteroAnnotations");
+            const pdfBlob = await readCurrentPdf(reader);
+            const client = new RagClient();
+            const request: RagConfig = {
+                rules: popupCfg.rules
+                    .filter((r) => r.enabled)
+                    .map((r) => ({ id: r.id, termsRaw: r.termsRaw }))
+            };
+            const resp = await client.analyzePdf(pdfBlob, request);
+            const created = await createHighlightsFromAnalyzeResponse(reader, popupCfg, resp);
+            reader._iframeWindow?.console?.log?.(`RAG: created ${created} annotations`);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            Zotero.debug?.(`RAG execute failed: ${msg}`);
+            reader._iframeWindow?.alert?.(`RAG failed: ${msg}`);
+        } finally {
+            executeBtn.disabled = false;
+            executeBtn.textContent = oldLabel;
+        }
     });
 
     return popup;
@@ -359,7 +389,7 @@ export function registerReaderToolbarButton() {
 
         btn.addEventListener("click", () => {
             popupCfg = loadCfgFromPrefs();
-            const popup = ensurePopup(doc);
+            const popup = ensurePopup(doc, reader);
 
             if (isPopupVisible(popup)) {
                 popup.style.display = "none";

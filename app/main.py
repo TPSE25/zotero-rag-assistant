@@ -228,7 +228,8 @@ async def annotations(
     return AnnotationsResponse(
         matches=[
             RagPdfMatch(
-                pageIndex=cfg.rules[0].id,
+                id=cfg.rules[0].id,
+                pageIndex=0,
                 rects=[
                     [72.0, 120.0, 260.0, 138.0],
                     [72.0, 145.0, 310.0, 163.0],

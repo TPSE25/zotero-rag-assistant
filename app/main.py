@@ -78,6 +78,9 @@ class QueryOut(BaseModel):
     sources: List[Source]
     raw_context: str
 
+def _document_id(zotero_id: str, filename: str, idx: int) -> str:
+    return f"{zotero_id}_{filename}_{idx}"
+
 async def get_query_hits(prompt: str, n_results: int = 20) -> List[Hit]:
     collection = _get_or_create_chroma_collection()
     client = _create_ollama_client()
@@ -88,15 +91,37 @@ async def get_query_hits(prompt: str, n_results: int = 20) -> List[Hit]:
         n_results=n_results,
         include=["documents", "metadatas"],
     )
-    return [
-        Hit(
-            text=document,
-            filename=metadata.get("filename", "unknown"),
-            zotero_id=metadata.get("zotero_id", "unknown"),
-            chunk_index=metadata.get("chunk_index")
-        )
-        for document, metadata in zip(res["documents"][0], res["metadatas"][0])
-    ]
+    hits = [create_hit(doc, metadata) for doc, metadata in zip(res["documents"][0], res["metadatas"][0])]
+    neighbor_ids = _get_neighbor_ids(hits)
+
+    if neighbor_ids:
+        n_res = collection.get(ids=list(neighbor_ids), include=["documents", "metadatas"])
+        hits += [create_hit(doc, metadata) for doc, metadata in zip(n_res["documents"], n_res["metadatas"])]
+
+    return hits
+
+
+def create_hit(doc: str, metadata: Dict[str, Any]) -> Hit:
+    return Hit(
+        text=doc,
+        filename=metadata["filename"],
+        zotero_id=metadata["zotero_id"],
+        chunk_index=metadata["chunk_index"]
+    )
+
+
+def _get_neighbor_ids(hits: List[Hit]) -> set:
+    hit_ids = {
+        _document_id(h.zotero_id, h.filename, h.chunk_index)
+        for h in hits
+    }
+    neighbor_ids = set()
+    for h in hits:
+        for offset in (-1, 1):
+            nid = _document_id(h.zotero_id, h.filename, h.chunk_index + offset)
+            if nid not in hit_ids:
+                 neighbor_ids.add(nid)
+    return neighbor_ids
 
 def format_sources_by_file(hits: List[Hit]) -> Tuple[str, List[Source]]:
     by_file: Dict[str, Tuple[str, List[str]]] = {}
@@ -189,7 +214,7 @@ async def file_changed_hook(
         response = await client.embed(model="nomic-embed-text", input=chunks)
         embeddings = response.embeddings
 
-        ids = [f"{zotero_id}_{fname}_{i}" for i in range(len(chunks))]
+        ids = [_document_id(zotero_id, fname, i) for i in range(len(chunks))]
         metadatas = [{
             "filename": fname,
             "zotero_id": zotero_id,

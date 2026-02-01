@@ -199,8 +199,9 @@ async def file_changed_hook(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-    zotero_id = os.path.splitext(os.path.basename(filename))[0]
-    collection.delete(where={"zotero_id": zotero_id})
+    zotero_id, extension = os.path.splitext(os.path.basename(filename))
+    if extension != ".prop":
+        collection.delete(where={"zotero_id": zotero_id})
 
     for fname, text in extracted_data.items():
         if not text:

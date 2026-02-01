@@ -55,7 +55,6 @@ async def chroma_stats() -> Dict[str, Any]:
             "name": collection.name,
             "count": collection.count(),
             "metadata": collection.metadata,
-            "configuration": collection.configuration,
         }
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Chroma unreachable: {e!s}") from e

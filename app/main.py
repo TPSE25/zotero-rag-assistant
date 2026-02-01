@@ -124,12 +124,12 @@ def _get_neighbor_ids(hits: List[Hit]) -> set:
     return neighbor_ids
 
 def format_sources_by_file(hits: List[Hit]) -> Tuple[str, List[Source]]:
-    by_file: Dict[str, Tuple[str, List[str]]] = {}
+    by_file: Dict[str, Tuple[str, List[Hit]]] = {}
 
     for hit in hits:
         if hit.filename not in by_file:
             by_file[hit.filename] = (hit.zotero_id, [])
-        by_file[hit.filename][1].append(hit.text.strip())
+        by_file[hit.filename][1].append(hit)
 
     blocks: List[str] = []
     sources: List[Source] = []
@@ -137,8 +137,12 @@ def format_sources_by_file(hits: List[Hit]) -> Tuple[str, List[Source]]:
     for i, (filename, (zotero_id, excerpts)) in enumerate(by_file.items(), start=1):
         sid = f"S{i}"
         sources.append(Source(id=sid, filename=filename, zotero_id=zotero_id))
+        excerpts_formatted = [
+            f"(chunk {hit.chunk_index}) {hit.text.strip()}"
+            for hit in sorted(excerpts, key=lambda x: x.chunk_index)
+        ]
 
-        combined = "\n\n---\n\n".join(excerpts)
+        combined = "\n\n---\n\n".join(excerpts_formatted)
         blocks.append(
             f"[{sid}] filename: {filename}\n"
             f"\"\"\"\n{combined}\n\"\"\""

@@ -1,39 +1,65 @@
-function insertMenu(win: _ZoteroTypes.MainWindow) {
-  const doc = win.top!.document; // 🔥 THIS IS THE FIX
+import { RagSection } from "./modules/ragSection";
+import { getString, initLocale } from "./utils/locale";
+import { createZToolkit } from "./utils/ztoolkit";
+import {registerReaderToolbarButton, unregisterReaderToolbarButton} from "./modules/readerToolbar";
 
-  const toolsPopup = doc.getElementById("menu_ToolsPopup");
-  if (!toolsPopup) {
-    Zotero.debug("❌ Tools menu popup not found in top document");
-    return;
-  }
+async function onStartup() {
+  await Promise.all([
+    Zotero.initializationPromise,
+    Zotero.unlockPromise,
+    Zotero.uiReadyPromise,
+  ]);
 
-  if (doc.getElementById("zoteroragtemplate-ai-chat")) {
-    return;
-  }
+  initLocale();
 
-  const item = doc.createXULElement("menuitem");
-  item.id = "zoteroragtemplate-ai-chat";
-  item.setAttribute("label", "AI Chat");
-
-  item.addEventListener("command", () => {
-    win.openDialog(
-      "chrome://zoteroragtemplate/content/chat.html",
-      "zotero-rag-chat",
-      "chrome,centerscreen,resizable",
-    );
+  Zotero.PreferencePanes.register({
+    pluginID: addon.data.config.addonID,
+    src: rootURI + "content/preferences.xhtml",
+    label: getString("prefs-title"),
+    image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`,
   });
+  RagSection.register();
+  registerReaderToolbarButton();
 
-  toolsPopup.appendChild(item);
-  Zotero.debug("✅ AI Chat menu item added");
+  await Promise.all(
+    Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
+  );
+
+  // Mark initialized as true to confirm plugin loading status
+  // outside of the plugin (e.g. scaffold testing process)
+  addon.data.initialized = true;
 }
 
+async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
+  addon.data.ztoolkit = createZToolkit();
+
+  win.MozXULElement.insertFTLIfNeeded(
+    `${addon.data.config.addonRef}-mainWindow.ftl`,
+  );
+}
+
+async function onMainWindowUnload(win: Window): Promise<void> {
+  ztoolkit.unregisterAll();
+  addon.data.dialog?.window?.close();
+}
+
+function onShutdown(): void {
+  ztoolkit.unregisterAll();
+  unregisterReaderToolbarButton()
+  addon.data.dialog?.window?.close();
+  // Remove addon object
+  addon.data.alive = false;
+  // @ts-expect-error - Plugin instance is not typed
+  delete Zotero[addon.data.config.addonInstance];
+}
+
+// Add your hooks here. For element click, etc.
+// Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
+// Otherwise the code would be hard to read and maintain.
+
 export default {
-  async onStartup() {},
-
-  async onMainWindowLoad(win: _ZoteroTypes.MainWindow) {
-    insertMenu(win);
-  },
-
-  async onMainWindowUnload() {},
-  async onShutdown() {},
+  onStartup,
+  onShutdown,
+  onMainWindowLoad,
+  onMainWindowUnload,
 };

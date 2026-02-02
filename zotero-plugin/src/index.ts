@@ -1,15 +1,25 @@
+import { BasicTool } from "zotero-plugin-toolkit";
 import Addon from "./addon";
-import hooks from "./hooks";
+import { config } from "../package.json";
 
-// Ensure Zotero.Zotero exists (it does in Zotero 7)
-const zoteroRoot = Zotero as any;
+const basicTool = new BasicTool();
 
-// Create addon instance
-const addon = new Addon();
+// @ts-expect-error - Plugin instance is not typed
+if (!basicTool.getGlobal("Zotero")[config.addonInstance]) {
+  _globalThis.addon = new Addon();
+  defineGlobal("ztoolkit", () => {
+    return _globalThis.addon.data.ztoolkit;
+  });
+  // @ts-expect-error - Plugin instance is not typed
+  Zotero[config.addonInstance] = addon;
+}
 
-// Attach hooks (bootstrap.js requires this)
-(addon as any).hooks = hooks;
-
-// Expose addon EXACTLY where scaffold expects it
-zoteroRoot.Zotero = zoteroRoot.Zotero || {};
-zoteroRoot.Zotero.ZoteroRAGPluginTemplate = addon;
+function defineGlobal(name: Parameters<BasicTool["getGlobal"]>[0]): void;
+function defineGlobal(name: string, getter: () => any): void;
+function defineGlobal(name: string, getter?: () => any) {
+  Object.defineProperty(_globalThis, name, {
+    get() {
+      return getter ? getter() : basicTool.getGlobal(name);
+    },
+  });
+}

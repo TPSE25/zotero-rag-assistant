@@ -3,7 +3,7 @@ import re
 
 class TextChunker:
     """Splits long text into manageable chunks for embeddings."""
-    
+
     def clean_text(self, text: Union[str, dict]) -> str:
         """
         Normalize and clean text.
@@ -15,7 +15,7 @@ class TextChunker:
         text = re.sub(r'[ \t]+', ' ', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
-    
+
     def estimate_token_count(self, text: str) -> int:
         """
         Rough token estimation.
@@ -23,34 +23,34 @@ class TextChunker:
         """
         words = text.split()
         return int(len(words) / 0.75)
-    
+
     def chunk_text(self, text: str, max_tokens: int = 800, overlap_tokens: int = 50) -> List[str]:
         """
         Split text into chunks respecting sentence boundaries.
         Adds overlap for better context continuity in RAG retrieval.
-        
+
         Args:
             text: Text to chunk
             max_tokens: Maximum tokens per chunk (approximate)
             overlap_tokens: Tokens to overlap between chunks for context
-        
+
         Returns:
             List of text chunks
         """
         # Split into sentences
         sentences = re.split(r'(?<=[.!?])\s+', text)
-        
+
         chunks: List[str] = []
         current_chunk: List[str] = []
         current_tokens = 0
-        
+
         for sentence in sentences:
             sentence_tokens = self.estimate_token_count(sentence)
-            
+
             # If adding this sentence exceeds max, save current chunk
             if current_tokens + sentence_tokens > max_tokens and current_chunk:
                 chunks.append(' '.join(current_chunk))
-                
+
                 # Keep last few sentences for overlap
                 overlap_sentences = []
                 overlap_tokens_count = 0
@@ -61,15 +61,15 @@ class TextChunker:
                         overlap_tokens_count += s_tokens
                     else:
                         break
-                
+
                 current_chunk = overlap_sentences
                 current_tokens = overlap_tokens_count
-            
+
             current_chunk.append(sentence)
             current_tokens += sentence_tokens
-        
+
         # Add final chunk
         if current_chunk:
             chunks.append(' '.join(current_chunk))
-        
+
         return chunks

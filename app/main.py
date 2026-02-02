@@ -2,7 +2,8 @@ import logging
 import os
 import sys
 import tempfile
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Literal, Optional, Callable, Annotated, Union
+from fastapi.responses import StreamingResponse
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, UploadFile, Form, File
@@ -73,10 +74,30 @@ class Source(BaseModel):
     filename: str
     zotero_id: str
 
-class QueryOut(BaseModel):
-    response: str
+class UpdateProgressEvent(BaseModel):
+    type: Literal["updateProgress"] = "updateProgress"
+    stage: str
+    debug: Optional[str] = None
+
+class SetSourcesEvent(BaseModel):
+    type: Literal["setSources"] = "setSources"
     sources: List[Source]
-    raw_context: str
+
+class TokenEvent(BaseModel):
+    type: Literal["token"] = "token"
+    token: str
+
+class DoneEvent(BaseModel):
+    type: Literal["done"] = "done"
+
+NDJSONEvent = Annotated[
+    Union[UpdateProgressEvent, SetSourcesEvent, TokenEvent, DoneEvent],
+    Field(discriminator="type"),
+]
+
+def _ndjson(event: NDJSONEvent) -> str:
+    return event.model_dump_json() + "\n"
+
 
 def _document_id(zotero_id: str, filename: str, idx: int) -> str:
     return f"{zotero_id}_{filename}_{idx}"
@@ -166,18 +187,32 @@ Rules:
 """
 
 @app.post("/api/query")
-async def query(body: QueryIn) -> QueryOut:
-    hits = await get_query_hits(body.prompt)
-    context, sources = format_sources_by_file(hits)
-    client = _create_ollama_client()
-    enriched = f"""QUESTION:
+async def query(body: QueryIn):
+    async def gen():
+        yield _ndjson(UpdateProgressEvent(stage="search_hits"))
+        hits = await get_query_hits(body.prompt)
+        context, sources = format_sources_by_file(hits)
+        yield _ndjson(SetSourcesEvent(sources=sources))
+        client = _create_ollama_client()
+        enriched = f"""QUESTION:
 {body.prompt}
 
 SOURCES:
 {context}
 """
-    out = await client.generate(model="llama3.2:latest", prompt=enriched, system=SYSTEM_PROMPT)
-    return QueryOut(response=out.response, sources=sources, raw_context=context)
+        yield _ndjson(UpdateProgressEvent(stage="generate_start", debug=context))
+        async for part in await client.generate(model="llama3.2:latest", prompt=enriched, system=SYSTEM_PROMPT, stream=True):
+            print(part)
+            yield _ndjson(TokenEvent(token=part["response"]))
+        yield _ndjson(DoneEvent())
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @app.post("/internal/file-changed")
 async def file_changed_hook(

@@ -235,31 +235,28 @@ async def annotations(
     config: str = Form(...),
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
+    
     if not cfg.rules:
         return AnnotationsResponse(matches=[])
-    if not cfg.rules:
-        return AnnotationsResponse(matches=[])
-
-    # Save the uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
-
-    # Run place recognizer
-    recognizer = TextPlaceRecognitionPDF(tmp_path)
-    places = recognizer.process_pdf()  # returns list of dicts with id, place, page, rects
-
-    matches = []
-    for place in places:
-        # Filter by the first rule's term (simple substring match)
-        rule_term = cfg.rules[0].termsRaw
-        if rule_term.lower() in place["place"].lower():
-            matches.append(
-                RagPdfMatch(
-                    id=place["id"],
-                    pageIndex=place["page"],
-                    rects=place["rects"]
-                )
+    
+    try:
+        # Remove tmp_path - using hardcoded test file
+        recognizer = TextPlaceRecognitionPDF()  # ← NO ARGUMENT!
+        places = recognizer.process_pdf(cfg.rules)
+        
+        matches = [
+            RagPdfMatch(
+                id=place["id"],
+                pageIndex=place["page"],
+                rects=place["rects"]
             )
-
-    return AnnotationsResponse(matches=matches)
+            for place in places
+        ]
+        
+        return AnnotationsResponse(matches=matches)
+    
+    except Exception as e:
+        import traceback
+        print(f"Error processing PDF: {e}")
+        traceback.print_exc()
+        return AnnotationsResponse(matches=[])

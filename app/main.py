@@ -305,6 +305,7 @@ async def annotations(
     cfg = RagPopupConfig.model_validate_json(config)
 
     if not cfg.rules:
+        logging.info("No rules provided, returning empty matches")
         return AnnotationsResponse(matches=[])
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(await file.read())
@@ -327,6 +328,6 @@ async def annotations(
 
     except Exception as e:
         import traceback
-        print(f"Error processing PDF: {e}")
+        logging.error(f"Error processing PDF: {e}")
         traceback.print_exc()
         return AnnotationsResponse(matches=[])

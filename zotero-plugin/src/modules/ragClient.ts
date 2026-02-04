@@ -10,10 +10,11 @@ export interface Source {
   zotero_id: string;
 }
 
-export interface QueryOut {
-  response: string;
-  sources: Source[];
-}
+export type QueryStreamMsg =
+    | { type: "setSources"; sources: Source[] }
+    | { type: "updateProgress"; stage: string; debug?: string; }
+    | { type: "token"; token: string }
+    | { type: "done" }
 
 export type RagHighlightRule = {
   id: string;
@@ -39,15 +40,13 @@ export class RagClient {
     return getPref("apiBaseUrl" as any) || "http://localhost:8080";
   }
 
-  public async query(prompt: string): Promise<QueryOut> {
+  public async *query(prompt: string): AsyncGenerator<QueryStreamMsg> {
     const url = `${this.baseUrl}/api/query`;
     const body: QueryIn = { prompt };
 
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
@@ -55,8 +54,32 @@ export class RagClient {
       const errorText = await response.text();
       throw new Error(`RAG API error (${response.status}): ${errorText}`);
     }
+    if (!response.body) {
+      throw new Error("Streaming not supported: response.body is null");
+    }
 
-    return (await response.json()) as QueryOut;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        yield JSON.parse(trimmed) as QueryStreamMsg;
+      }
+    }
+
+    const tail = buf.trim();
+    if (tail) yield JSON.parse(tail) as QueryStreamMsg;
   }
 
   public async analyzePdf(pdf: string, cfg: RagConfig): Promise<RagAnalyzePdfResponse> {

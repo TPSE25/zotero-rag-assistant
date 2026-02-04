@@ -306,6 +306,7 @@ export class RagSection {
 
         const appendMessageNode = (m: ChatMessage) => {
           const row = ztoolkit.UI.createElement(body.ownerDocument!, "div");
+          row.dataset.msgId = m.id;
           row.classList.add("rag-msg-row");
           row.classList.add(m.role === "user" ? "is-user" : "is-assistant");
 
@@ -363,6 +364,12 @@ export class RagSection {
           messagesEl.scrollTop = messagesEl.scrollHeight;
         };
 
+        const setMessageText = (msgId: string, value: string) => {
+          const row = messagesEl.querySelector(`[data-msg-id="${msgId}"]`) as HTMLElement | null;
+          const textEl = row?.querySelector(".rag-bubble-text") as HTMLElement | null;
+          if (textEl) textEl.textContent = value;
+        };
+
         const ensureSession = async (): Promise<string> => {
           if (currentSessionId) return currentSessionId;
           const s = await this.chatDB!.createSession("New chat");
@@ -403,15 +410,49 @@ export class RagSection {
           scrollToBottom();
 
           try {
-            const result = await this.ragClient.query(prompt);
+            let answer = "";
+            let sources: any[] = [];
+            let sawFirstToken = false;
+
+            setMessageText(pending.id, getString("querying-message"));
+
+            for await (const msg of this.ragClient.query(prompt)) {
+              if (msg.type === "updateProgress") {
+                if (!sawFirstToken) {
+                  setMessageText(pending.id, `${getString("querying-message")} (${msg.stage})`);
+                }
+                if (msg.debug !== undefined) {
+                  Zotero.debug("[RAG] " + msg.debug)
+                }
+              }
+
+              if (msg.type === "setSources") {
+                sources = msg.sources;
+              }
+
+              if (msg.type === "token") {
+                if (!sawFirstToken) {
+                  sawFirstToken = true;
+                  answer = "";
+                }
+                answer += msg.token;
+                setMessageText(pending.id, answer);
+                scrollToBottom();
+              }
+
+              if (msg.type === "done") {
+                break;
+              }
+            }
 
             await this.chatDB!.updateMessage(pending.id, {
-              content: result.response,
-              sources: result.sources,
+              content: answer,
+              sources,
             });
 
             await renderTabs();
             await renderMessages();
+
           } catch (e: any) {
             await this.chatDB!.updateMessage(pending.id, {
               content: getString("error-prefix", { args: { message: e?.message ?? String(e) } })

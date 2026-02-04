@@ -3,7 +3,7 @@ import pdfplumber
 class TextPlaceRecognitionPDF:
     def __init__(self, path=None):
         # Fallback to test path if no path is provided
-        self.pdf_path = path or "app/tests/test_data_file_extractor/paper.pdf"
+        self.pdf_path = "app/tests/test_data_file_extractor/paper.pdf"
         self.doc = pdfplumber.open(self.pdf_path)
     
     def extract_text(self):

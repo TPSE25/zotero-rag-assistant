@@ -12,6 +12,7 @@ services:
     environment:
       - UPSTREAM_HOST=api
       - UPSTREAM_PORT=8000
+
   chroma:
     image: ghcr.io/chroma-core/chroma:latest
     container_name: chroma
@@ -21,6 +22,7 @@ services:
       - CHROMA_SERVER_HTTP_PORT=8000
     volumes:
       - chroma:/chroma/chroma
+
   core:
     build:
       context: ../
@@ -32,8 +34,12 @@ services:
       - OLLAMA_HOST=not-set
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
+    ports:
+      - "8000:8000"
+      - "5678:5678"
     volumes:
       - documents:/data
+
   webdav:
     build: webdav/
     container_name: webdav
@@ -45,6 +51,7 @@ services:
       - CORE_API_URL=http://core:8000/internal/file-changed
     volumes:
       - documents:/var/lib/webdav/data
+
 volumes:
   documents:
   chroma:

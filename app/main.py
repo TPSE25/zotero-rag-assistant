@@ -237,26 +237,45 @@ async def annotations(
     cfg = RagPopupConfig.model_validate_json(config)
     
     if not cfg.rules:
+        logging.info("No rules provided, returning empty matches")
         return AnnotationsResponse(matches=[])
     
     try:
-        # Remove tmp_path - using hardcoded test file
-        recognizer = TextPlaceRecognitionPDF()  # ← NO ARGUMENT!
-        places = recognizer.process_pdf(cfg.rules)
+        # Save uploaded file to temp location
+        suffix = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
         
-        matches = [
-            RagPdfMatch(
-                id=place["id"],
-                pageIndex=place["page"],
-                rects=place["rects"]
-            )
-            for place in places
-        ]
-        
-        return AnnotationsResponse(matches=matches)
+        try:
+            # Write the uploaded file content
+            content = await file.read()
+            os.write(tmp_fd, content)
+            os.close(tmp_fd)
+            
+            logging.info(f"Processing PDF at {tmp_path} with {len(cfg.rules)} rules")
+            
+            # Use the uploaded file path
+            recognizer = TextPlaceRecognitionPDF(tmp_path)
+            places = recognizer.process_pdf(cfg.rules)
+            
+            logging.info(f"Found {len(places)} matches")
+            
+            matches = [
+                RagPdfMatch(
+                    id=place["id"],
+                    pageIndex=place["page"],
+                    rects=place["rects"]
+                )
+                for place in places
+            ]
+            
+            return AnnotationsResponse(matches=matches)
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
     
     except Exception as e:
         import traceback
-        print(f"Error processing PDF: {e}")
+        logging.error(f"Error processing PDF: {e}")
         traceback.print_exc()
         return AnnotationsResponse(matches=[])

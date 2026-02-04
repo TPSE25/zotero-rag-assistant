@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 import tempfile
-from app.text_place_recognition_pdf import TextPlaceRecognitionPDF
+from text_place_recognition_pdf import TextPlaceRecognitionPDF
 
 from typing import Dict, List, Any, Tuple, Literal, Optional, Callable, Annotated, Union
 from fastapi.responses import StreamingResponse
@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 from ollama import AsyncClient
 import chromadb
 
-from app.file_extractor import extract_auto
-from app.text_chunking import TextChunker
+from file_extractor import extract_auto
+from text_chunking import TextChunker
 
 app = FastAPI()
 
@@ -303,15 +303,15 @@ async def annotations(
     config: str = Form(...),
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
-    
+
     if not cfg.rules:
         return AnnotationsResponse(matches=[])
-    
+
     try:
         # Remove tmp_path - using hardcoded test file
         recognizer = TextPlaceRecognitionPDF()  # ← NO ARGUMENT!
         places = recognizer.process_pdf(cfg.rules)
-        
+
         matches = [
             RagPdfMatch(
                 id=place["id"],
@@ -320,9 +320,9 @@ async def annotations(
             )
             for place in places
         ]
-        
+
         return AnnotationsResponse(matches=matches)
-    
+
     except Exception as e:
         import traceback
         print(f"Error processing PDF: {e}")

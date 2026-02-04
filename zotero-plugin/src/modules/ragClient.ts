@@ -87,7 +87,11 @@ export class RagClient {
     const url = `${this.baseUrl}/api/annotations`;
 
     const fd = new win.FormData();
-    fd.append("file", new win.Blob([pdf ], { type: "application/pdf" }), "document.pdf");
+    const u8 = new win.Uint8Array(pdf.length);
+    for (let i = 0; i < pdf.length; i++) {
+      u8[i] = pdf.charCodeAt(i) & 0xff;
+    }
+    fd.append("file", new win.Blob([u8], { type: "application/pdf" }), "document.pdf");
     fd.append("config", JSON.stringify(cfg));
 
     const res = await fetch(url, {

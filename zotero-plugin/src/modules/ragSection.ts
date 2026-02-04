@@ -242,9 +242,9 @@ export class RagSection {
         let currentSessionId: string | null = sessions[0]?.id ?? null;
 
         if (!currentSessionId) {
-          const s = await this.chatDB.createSession(getString("rag-chat-new-title"));
-          sessions = [s];
-          currentSessionId = s.id;
+          const session = await this.chatDB.createSession(getString("rag-chat-new-title"));
+          sessions = [session];
+          currentSessionId = session.id;
         }
 
         const renderTabs = async () => {

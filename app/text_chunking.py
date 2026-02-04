@@ -52,7 +52,7 @@ class TextChunker:
                 chunks.append(' '.join(current_chunk))
 
                 # Keep last few sentences for overlap
-                overlap_sentences = []
+                overlap_sentences: List[str] = []
                 overlap_tokens_count = 0
                 for s in reversed(current_chunk):
                     s_tokens = self.estimate_token_count(s)

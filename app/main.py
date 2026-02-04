@@ -133,12 +133,12 @@ def create_hit(doc: str, metadata: Dict[str, Any]) -> Hit:
     )
 
 
-def _get_neighbor_ids(hits: List[Hit]) -> set:
+def _get_neighbor_ids(hits: List[Hit]) -> set[str]:
     hit_ids = {
         _document_id(h.zotero_id, h.filename, h.chunk_index)
         for h in hits
     }
-    neighbor_ids = set()
+    neighbor_ids: set[str] = set()
     for h in hits:
         for offset in (-1, 1):
             nid = _document_id(h.zotero_id, h.filename, h.chunk_index + offset)
@@ -189,7 +189,7 @@ Rules:
 """
 
 @app.post("/api/query")
-async def query(body: QueryIn):
+async def query(body: QueryIn) -> StreamingResponse:
     async def gen():
         yield _ndjson(UpdateProgressEvent(stage="search_hits"))
         hits = await get_query_hits(body.prompt)
@@ -306,10 +306,12 @@ async def annotations(
 
     if not cfg.rules:
         return AnnotationsResponse(matches=[])
-
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
     try:
         # Remove tmp_path - using hardcoded test file
-        recognizer = TextPlaceRecognitionPDF()  # ← NO ARGUMENT!
+        recognizer = TextPlaceRecognitionPDF(tmp_path)  # ← NO ARGUMENT!
         places = recognizer.process_pdf(cfg.rules)
 
         matches = [

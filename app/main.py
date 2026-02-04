@@ -4,7 +4,7 @@ import sys
 import tempfile
 from text_place_recognition_pdf import TextPlaceRecognitionPDF
 
-from typing import Dict, List, Any, Tuple, Literal, Optional, Callable, Annotated, Union
+from typing import Dict, List, Any, Tuple, Literal, Optional, Annotated, Union
 from fastapi.responses import StreamingResponse
 
 from chromadb.api.models.Collection import Collection

@@ -2,9 +2,9 @@ import logging
 import os
 import sys
 import tempfile
-from app.text_place_recognition_pdf import TextPlaceRecognitionPDF
+from text_place_recognition_pdf import TextPlaceRecognitionPDF
 
-from typing import Dict, List, Any, Tuple, Literal, Optional, Callable, Annotated, Union
+from typing import Dict, List, Any, Tuple, Literal, Optional, Annotated, Union
 from fastapi.responses import StreamingResponse
 
 from chromadb.api.models.Collection import Collection
@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 from ollama import AsyncClient
 import chromadb
 
-from app.file_extractor import extract_auto
-from app.text_chunking import TextChunker
+from file_extractor import extract_auto
+from text_chunking import TextChunker
 
 app = FastAPI()
 
@@ -133,12 +133,12 @@ def create_hit(doc: str, metadata: Dict[str, Any]) -> Hit:
     )
 
 
-def _get_neighbor_ids(hits: List[Hit]) -> set:
+def _get_neighbor_ids(hits: List[Hit]) -> set[str]:
     hit_ids = {
         _document_id(h.zotero_id, h.filename, h.chunk_index)
         for h in hits
     }
-    neighbor_ids = set()
+    neighbor_ids: set[str] = set()
     for h in hits:
         for offset in (-1, 1):
             nid = _document_id(h.zotero_id, h.filename, h.chunk_index + offset)
@@ -189,7 +189,7 @@ Rules:
 """
 
 @app.post("/api/query")
-async def query(body: QueryIn):
+async def query(body: QueryIn) -> StreamingResponse:
     async def gen():
         yield _ndjson(UpdateProgressEvent(stage="search_hits"))
         hits = await get_query_hits(body.prompt)
@@ -303,45 +303,29 @@ async def annotations(
     config: str = Form(...),
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
-    
+
     if not cfg.rules:
         logging.info("No rules provided, returning empty matches")
         return AnnotationsResponse(matches=[])
-    
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
     try:
-        # Save uploaded file to temp location
-        suffix = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
-        
-        try:
-            # Write the uploaded file content
-            content = await file.read()
-            os.write(tmp_fd, content)
-            os.close(tmp_fd)
-            
-            logging.info(f"Processing PDF at {tmp_path} with {len(cfg.rules)} rules")
-            
-            # Use the uploaded file path
-            recognizer = TextPlaceRecognitionPDF(tmp_path)
-            places = recognizer.process_pdf(cfg.rules)
-            
-            logging.info(f"Found {len(places)} matches")
-            
-            matches = [
-                RagPdfMatch(
-                    id=place["id"],
-                    pageIndex=place["page"],
-                    rects=place["rects"]
-                )
-                for place in places
-            ]
-            
-            return AnnotationsResponse(matches=matches)
-        finally:
-            # Clean up temp file
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-    
+        # Remove tmp_path - using hardcoded test file
+        recognizer = TextPlaceRecognitionPDF(tmp_path)  # ← NO ARGUMENT!
+        places = recognizer.process_pdf(cfg.rules)
+
+        matches = [
+            RagPdfMatch(
+                id=place["id"],
+                pageIndex=place["page"],
+                rects=place["rects"]
+            )
+            for place in places
+        ]
+
+        return AnnotationsResponse(matches=matches)
+
     except Exception as e:
         import traceback
         logging.error(f"Error processing PDF: {e}")

@@ -1,9 +1,6 @@
 name: Core CI
 
-on:
-  push:
-    branches: ["**"]
-  pull_request:
+on: push
 
 jobs:
   core-ci:

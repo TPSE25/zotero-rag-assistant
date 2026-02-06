@@ -225,7 +225,7 @@ export class RagSection {
         const win = body.ownerDocument?.defaultView as Window | null;
         if (!win) return;
 
-        const idbFactory = (win.indexedDB ?? (win as any).mozIndexedDB) as IDBFactory | undefined;
+        const idbFactory = (win.indexedDB ?? win.mozIndexedDB) as IDBFactory | undefined;
         if (!idbFactory) return;
 
         if (!this.chatDB) this.chatDB = new ChatDB(idbFactory);

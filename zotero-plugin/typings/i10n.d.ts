@@ -5,7 +5,9 @@
 export type FluentMessageId =
   | 'error-prefix'
   | 'pref-apiBaseUrl'
+  | 'pref-browse'
   | 'pref-help'
+  | 'pref-outputDir'
   | 'prefs-title'
   | 'querying-message'
   | 'rag-chat-new-title'

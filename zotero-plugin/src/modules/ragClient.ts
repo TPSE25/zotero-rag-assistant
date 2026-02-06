@@ -37,7 +37,7 @@ export type RagAnalyzePdfResponse = {
 
 export class RagClient {
   private get baseUrl(): string {
-    return getPref("apiBaseUrl" as any) || "http://localhost:8080";
+    return getPref("apiBaseUrl") || "http://localhost:8080";
   }
 
   public async *query(prompt: string): AsyncGenerator<QueryStreamMsg> {

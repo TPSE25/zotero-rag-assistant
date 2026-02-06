@@ -1,5 +1,4 @@
-const getZoteroPane = () =>
-    (Zotero as any).getActiveZoteroPane?.();
+const getZoteroPane = () => Zotero.getActiveZoteroPane?.();
 
 const resolveItem = (zoteroId: string) => {
     const libID = (Zotero.Libraries?.userLibraryID ?? 0);

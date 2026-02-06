@@ -19,8 +19,8 @@ function newRuleId() {
 let popupCfg: RagPopupConfig = { rules: [] };
 
 function getPrefKey(): string {
-    const addonRef = (addon as any)?.data?.config?.addonRef as string | undefined;
-    const addonID = (addon as any)?.data?.config?.addonID as string | undefined;
+    const addonRef = addon?.data?.config?.addonRef as string | undefined;
+    const addonID = addon?.data?.config?.addonID as string | undefined;
 
     const ns = addonRef
         ? `extensions.zotero.${addonRef}.`

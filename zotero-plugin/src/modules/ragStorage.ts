@@ -93,19 +93,6 @@ export class ChatDB {
         }
     }
 
-    private async removeSessionFromDisk(sessionId: string): Promise<void> {
-        const outDir = this.getOutputDir();
-        if (!outDir) return;
-
-        try {
-            const targetPath = PathUtils.join(outDir, `${sessionId}.txt`);
-            await IOUtils.remove(targetPath, { ignoreAbsent: true });
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(typeof e === "string" ? e : JSON.stringify(e));
-            Zotero.logError(err);
-        }
-    }
-
     private open(): Promise<IDBDatabase> {
         if (this.dbPromise) return this.dbPromise;
 
@@ -193,7 +180,6 @@ export class ChatDB {
             const keys = await reqToPromise<string[]>(keysReq);
             keys.forEach((k) => msgStore.delete(k));
         });
-        await this.removeSessionFromDisk(sessionId);
     }
 
     async listMessages(sessionId: string): Promise<ChatMessage[]> {

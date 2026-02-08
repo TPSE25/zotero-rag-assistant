@@ -2,6 +2,7 @@ import { RagClient } from "./ragClient";
 import { getString } from "../utils/locale";
 import { ChatDB, ChatMessage, ChatSession } from "./ragStorage";
 import { showZoteroSource } from "./openSource";
+import {assert} from "chai";
 
 export class RagSection {
   private static ragClient = new RagClient();
@@ -237,8 +238,9 @@ export class RagSection {
           </div>
       `,
       onRender: async ({ body /*, item*/ }) => {
+        const doc = body.ownerDocument;
         const win = body.ownerDocument?.defaultView as Window | null;
-        if (!win) return;
+        if (!doc || !win) return;
 
         const idbFactory = (win.indexedDB ?? win.mozIndexedDB) as IDBFactory | undefined;
         if (!idbFactory) return;
@@ -258,7 +260,7 @@ export class RagSection {
         let currentSessionId: string | null = sessions[0]?.id ?? null;
 
         if (!currentSessionId) {
-          const session = await this.chatDB.createSession(getString("rag-chat-new-title"));
+          const session = await this.chatDB.createSession(getString("chat-new-title"));
           sessions = [session];
           currentSessionId = session.id;
         }
@@ -301,6 +303,7 @@ export class RagSection {
           };
 
           inputEl.onkeydown = (e) => {
+            assert(e instanceof KeyboardEvent);
             e.stopPropagation();
             if (e.key === "Enter") {
               e.preventDefault();
@@ -320,7 +323,7 @@ export class RagSection {
         };
 
         const renderTabs = async () => {
-          sessions = await this.chatDB.listSessions();
+          sessions = await this.chatDB!.listSessions();
           if (!currentSessionId && sessions.length) currentSessionId = sessions[0].id;
 
           tabsEl.innerHTML = "";
@@ -439,7 +442,7 @@ export class RagSection {
         };
 
         const scrollToBottom = () => {
-          const side = body.ownerDocument.getElementById("zotero-view-item") as HTMLElement | null;
+          const side = doc.getElementById("zotero-view-item") as HTMLElement | null;
           if (!side) throw new Error("No #zotero-view-item found");
 
           win.requestAnimationFrame(() => {
@@ -561,6 +564,7 @@ export class RagSection {
 
         sendBtn.onclick = sendPrompt;
         input.onkeydown = (e) => {
+          assert(e instanceof KeyboardEvent);
           if (e.key === "Enter") {
             e.preventDefault();
             void sendPrompt();

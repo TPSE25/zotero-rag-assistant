@@ -30,9 +30,9 @@ function getPrefKey(): string {
 }
 
 function isPopupVisible(popup: HTMLElement): boolean {
-    const win = popup.ownerDocument.defaultView;
+    const win = popup.ownerDocument!.defaultView;
     if (!win) return popup.style.display !== "none";
-    return win.getComputedStyle(popup).display !== "none";
+    return win.getComputedStyle(popup)!.display !== "none";
 }
 
 function loadCfgFromPrefs(): RagPopupConfig {
@@ -184,7 +184,7 @@ function renderRules(popup: HTMLDivElement) {
     rulesHost.innerHTML = "";
 
     for (const rule of popupCfg.rules) {
-        const row = popup.ownerDocument.createElement("div");
+        const row = popup.ownerDocument!.createElement("div");
         row.className = "rag-rule";
         row.dataset.ruleId = rule.id;
 
@@ -204,8 +204,8 @@ function renderRules(popup: HTMLDivElement) {
 }
 
 function readUiIntoConfig(popup: HTMLDivElement) {
-    const ruleEls = Array.from(popup.querySelectorAll<HTMLElement>("#rag-rules [data-rule-id]"));
-    const rules: RagHighlightRule[] = ruleEls.map((el) => {
+    const ruleEls = Array.from<HTMLElement>(popup.querySelectorAll("#rag-rules [data-rule-id]"));
+    const rules: RagHighlightRule[] = ruleEls.map(el => {
         const id = el.dataset.ruleId!;
         return {
             id,
@@ -253,21 +253,21 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
     if (!popup.dataset.ragDocBound) {
         popup.dataset.ragDocBound = "1";
 
-        doc.addEventListener("keydown", (e) => {
+        doc.addEventListener("keydown", (e: KeyboardEvent) => {
             if (e.key === "Escape") close();
         });
 
-        doc.addEventListener("mousedown", (e) => {
+        doc.addEventListener("mousedown", (e: MouseEvent) => {
             if (isPopupVisible(popup) && !popup.contains(e.target as Node)) close();
         });
     }
 
     popup.addEventListener("click", (e) => {
         const target = e.target as HTMLElement;
-        const removeBtn = target.closest<HTMLButtonElement>("[data-action='remove-rule']");
+        const removeBtn = target.closest("[data-action='remove-rule']") as HTMLButtonElement | null;
         if (!removeBtn) return;
 
-        const ruleEl = removeBtn.closest<HTMLElement>("[data-rule-id]");
+        const ruleEl = removeBtn.closest("[data-rule-id]") as HTMLElement | null;
         const ruleId = ruleEl?.dataset.ruleId;
         if (!ruleId) return;
 
@@ -332,7 +332,7 @@ function openPopupNearButton(popup: HTMLDivElement, btn: HTMLElement) {
     const rect = btn.getBoundingClientRect();
     const margin = 8;
 
-    const win = popup.ownerDocument.defaultView!;
+    const win = popup.ownerDocument!.defaultView!;
     const maxX = win.innerWidth - popup.offsetWidth - margin;
     const maxY = win.innerHeight - popup.offsetHeight - margin;
 
@@ -340,7 +340,15 @@ function openPopupNearButton(popup: HTMLDivElement, btn: HTMLElement) {
     popup.style.top = `${Math.max(margin, Math.min(rect.bottom + margin, maxY))}px`;
 }
 
-let toolbarHandler: Parameters<typeof Zotero.Reader.registerEventListener>[1] | undefined;
+type RenderToolbarEvent = {
+    reader: any;
+    doc: Document;
+    params: {};
+    append: (...nodes: Array<Node | string>) => void; // appendDOM
+    type: "renderToolbar";
+};
+let toolbarHandler: ((event: RenderToolbarEvent) => void | Promise<void>) | undefined;
+
 
 export function registerReaderToolbarButton() {
     if (toolbarHandler) return;
@@ -359,7 +367,7 @@ export function registerReaderToolbarButton() {
         btn.title = "Highlighting";
 
         const svgNS = "http://www.w3.org/2000/svg";
-        const svg = doc.createElementNS(svgNS, "svg");
+        const svg = doc.createElementNS(svgNS, "svg") as unknown as SVGSVGElement;
         svg.setAttribute("width", "20");
         svg.setAttribute("height", "20");
         svg.setAttribute("viewBox", "0 0 24 24");

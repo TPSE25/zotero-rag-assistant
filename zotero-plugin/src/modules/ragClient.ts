@@ -14,7 +14,7 @@ export type QueryStreamMsg =
     | { type: "setSources"; sources: Source[] }
     | { type: "updateProgress"; stage: string; debug?: string; }
     | { type: "token"; token: string }
-    | { type: "done" }
+    | { type: "done" };
 
 export type RagHighlightRule = {
   id: string;
@@ -63,6 +63,7 @@ export class RagClient {
 
     let buf = "";
     while (true) {
+      // @ts-expect-error zotero/gecko types: getReader() ends up as BYOB
       const { value, done } = await reader.read();
       if (done) break;
 
@@ -103,6 +104,6 @@ export class RagClient {
       const body = await res.text().catch(() => "");
       throw new Error(`RAG analyzePdf failed: HTTP ${res.status} ${res.statusText} ${body}`);
     }
-    return (await res.json()) as RagAnalyzePdfResponse;
+    return (await res.json()) as unknown as RagAnalyzePdfResponse;
   }
 }

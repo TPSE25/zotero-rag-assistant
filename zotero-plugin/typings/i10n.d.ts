@@ -3,6 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'chat-new-title'
   | 'error-prefix'
   | 'pref-apiBaseUrl'
   | 'pref-browse'
@@ -10,12 +11,11 @@ export type FluentMessageId =
   | 'pref-outputDir'
   | 'prefs-title'
   | 'querying-message'
-  | 'rag-chat-new-title'
   | 'rag-query-button-label'
   | 'rag-query-input-placeholder'
   | 'rag-section-header'
   | 'rag-section-sidenav'
-  | 'rag-sources-header'
+  | 'sources-header'
   | 'webdav-check-dialog-body'
   | 'webdav-check-dialog-title'
   | 'webdav-check-disabled'

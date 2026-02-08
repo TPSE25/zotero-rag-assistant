@@ -83,20 +83,20 @@ export function checkWebDAVOnStart() {
   });
 
   const buttonFlags =
-      Services.prompt.BUTTON_POS_0 * Services.prompt.BUTTON_TITLE_IS_STRING +
-      Services.prompt.BUTTON_POS_1 * Services.prompt.BUTTON_TITLE_IS_STRING +
-      Services.prompt.BUTTON_POS_0_DEFAULT;
+      Services.prompt.BUTTON_POS_0! * Services.prompt.BUTTON_TITLE_IS_STRING! +
+      Services.prompt.BUTTON_POS_1! * Services.prompt.BUTTON_TITLE_IS_STRING! +
+      Services.prompt.BUTTON_POS_0_DEFAULT!;
 
   const choice = Services.prompt.confirmEx(
-      Zotero.getMainWindow(),
+      Zotero.getMainWindow() as unknown as mozIDOMWindowProxy,
       getString("webdav-check-dialog-title"),
       msg,
       buttonFlags,
       getString("webdav-check-open-settings"),
       getString("webdav-check-not-now"),
-      null,
-      null,
-      {},
+      "",
+      "",
+      { value: false }, /* unused */
   );
 
   if (choice === 0) {

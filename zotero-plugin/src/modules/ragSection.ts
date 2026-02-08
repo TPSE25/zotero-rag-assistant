@@ -191,6 +191,12 @@ export class RagSection {
               padding: 0 8px;
             }
 
+            #rag-nav-top {
+              display: flex;
+              justify-content: center;
+              margin-bottom: 6px;
+            }
+
             #rag-query-input,
             #rag-query-button,
             #rag-new-chat {
@@ -206,11 +212,29 @@ export class RagSection {
               justify-content: center;
               padding: 0 12px;
             }
+            
+            #rag-scroll-top,
+            #rag-scroll-bottom {
+              flex: 0 0 auto;
+              width: 28px;
+              padding: 0;
+              font-size: 14px;
+              position: relative;
+              top: -2px;
+            }
+
           </html:style>
           <div id="rag-root">
+          <div id="rag-nav-top">
+            <html:button
+              id="rag-scroll-bottom"
+              title="Jump to latest message"
+            >⬇</html:button>
+          </div>
             <div id="rag-messages"></div>
         
             <div id="rag-input-row">
+            <html:button id="rag-scroll-top" title="First message">⬆</html:button>
               <html:input id="rag-query-input" type="text" data-l10n-id="rag-query-input-placeholder"/>
               <html:button id="rag-query-button" data-l10n-id="rag-query-button-label">Ask</html:button>
             </div>
@@ -235,8 +259,10 @@ export class RagSection {
         const messagesEl = body.querySelector("#rag-messages") as HTMLElement;
         const input = body.querySelector("#rag-query-input") as HTMLInputElement;
         const sendBtn = body.querySelector("#rag-query-button") as HTMLButtonElement;
+        const scrollTopBtn = body.querySelector("#rag-scroll-top") as HTMLButtonElement;
+        const scrollBottomBtn = body.querySelector("#rag-scroll-bottom") as HTMLButtonElement;
 
-        if (!tabsEl || !newChatBtn || !messagesEl || !input || !sendBtn) return;
+        if (!tabsEl || !newChatBtn || !messagesEl || !input || !sendBtn || !scrollTopBtn || !scrollBottomBtn) return;
 
         let sessions: ChatSession[] = await this.chatDB.listSessions();
         let currentSessionId: string | null = sessions[0]?.id ?? null;
@@ -359,19 +385,44 @@ export class RagSection {
           row.appendChild(bubble);
           messagesEl.appendChild(row);
         };
-
+        let autoScrollEnabled = true;
         const scrollToBottom = () => {
-          const side = body.ownerDocument.getElementById("zotero-view-item") as HTMLElement | null;
+          if (!autoScrollEnabled) return;
+          win.requestAnimationFrame(() => {
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          });
+        };
+        /*  const side = body.ownerDocument.getElementById("zotero-view-item") as HTMLElement | null;
           if (!side) throw new Error("No #zotero-view-item found");
 
           win.requestAnimationFrame(() => {
             win.requestAnimationFrame(() => {
               /* for some reason the scrollHeight will not reset when we remove chat elements.
                  so just updating it will recover from the illegal position */
-              side.scrollTop = side.scrollHeight + 100;
-            });
-          });
+             // side.scrollTop = side.scrollHeight + 100;
+          //  });
+        //};
+        messagesEl.addEventListener("wheel", () => {
+          autoScrollEnabled = false;
+        });
+        messagesEl.addEventListener("touchmove", () => {
+          autoScrollEnabled = false;
+        });
+        const scrollToFirstMessage = () => {
+          autoScrollEnabled = false;
+          const first = messagesEl.firstElementChild as HTMLElement | null;
+          if (!first) return;
+
+          first.scrollIntoView({ behavior: "smooth", block: "start" });
         };
+
+        const scrollToLastMessage = () => {
+          autoScrollEnabled = true;
+          const last = messagesEl.lastElementChild as HTMLElement | null;
+          if (!last) return;
+
+          last.scrollIntoView({ behavior: "smooth", block: "end" });
+        }
 
         const setMessageText = (msgId: string, value: string) => {
           const row = messagesEl.querySelector(`[data-msg-id="${msgId}"]`) as HTMLElement | null;
@@ -488,6 +539,9 @@ export class RagSection {
             void sendPrompt();
           }
         };
+
+        scrollTopBtn.onclick = scrollToFirstMessage;
+        scrollBottomBtn.onclick = scrollToLastMessage;
 
         await renderTabs();
         await renderMessages();

@@ -335,7 +335,7 @@ async def annotations(
         return AnnotationsResponse(matches=[])
 
     # 1. Parallelize AI expansions
-    async def get_refined_rule(rule):
+    async def get_refined_rule(rule: RagHighlightRule) -> RagHighlightRule:
         try:
             response = await ollama_client.generate(
                 model="llama3.2:latest",

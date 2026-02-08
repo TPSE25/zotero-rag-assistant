@@ -25,7 +25,6 @@ class PageData(TypedDict):
 
 class PlaceMatch(TypedDict):
     id: Any
-    place: str
     page: int
     rects: list[Optional[Rect]]
 
@@ -128,7 +127,8 @@ class TextPlaceRecognitionPDF:
                     # 3. Only loop through word objects if the term exists on the page
                     if term in page_text_lower:
                         for word in page_words:
-                            if not word.get("rect"): continue
+                            if not word.get("rect"):
+                                continue
 
                             word_text = word["text"].lower()
                             # Exact match or substring match for longer terms

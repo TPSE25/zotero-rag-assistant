@@ -361,7 +361,16 @@ export class RagSection {
         };
 
         const scrollToBottom = () => {
-          messagesEl.scrollTop = messagesEl.scrollHeight;
+          const side = body.ownerDocument.getElementById("zotero-view-item") as HTMLElement | null;
+          if (!side) throw new Error("No #zotero-view-item found");
+
+          win.requestAnimationFrame(() => {
+            win.requestAnimationFrame(() => {
+              /* for some reason the scrollHeight will not reset when we remove chat elements.
+                 so just updating it will recover from the illegal position */
+              side.scrollTop = side.scrollHeight + 100;
+            });
+          });
         };
 
         const setMessageText = (msgId: string, value: string) => {

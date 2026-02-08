@@ -2,13 +2,15 @@ import logging
 import os
 import sys
 import tempfile
+import asyncio
+from fastapi.concurrency import run_in_threadpool
 from text_place_recognition_pdf import TextPlaceRecognitionPDF
 
 from typing import Dict, List, Any, Tuple, Literal, Optional, Annotated, Union
 from fastapi.responses import StreamingResponse
 
 from chromadb.api.models.Collection import Collection
-from fastapi import FastAPI, HTTPException, UploadFile, Form, File
+from fastapi import FastAPI, HTTPException, UploadFile, Form, File,Depends
 from pydantic import BaseModel, Field
 from ollama import AsyncClient
 import chromadb
@@ -301,33 +303,49 @@ class RagPopupConfig(BaseModel):
 async def annotations(
     file: UploadFile = File(...),
     config: str = Form(...),
+    ollama_client: AsyncClient = Depends(_create_ollama_client) 
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
-
     if not cfg.rules:
-        logging.info("No rules provided, returning empty matches")
         return AnnotationsResponse(matches=[])
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
+
+    # 1. Parallelize AI expansions
+    async def get_refined_rule(rule):
+        try:
+            response = await ollama_client.generate(
+                model="llama3.2:latest",
+                prompt=f"Provide 3-5 keywords for: {rule.termsRaw}. Return only comma-separated words.",
+                stream=False
+            )
+            ai_words = response['response'].strip()
+            return RagHighlightRule(id=rule.id, termsRaw=f"{rule.termsRaw}, {ai_words}")
+        except Exception:
+            return rule # Fallback to original rule if AI fails
+
+    refined_rules = await asyncio.gather(*(get_refined_rule(r) for r in cfg.rules))
+
+    tmp_path = None 
     try:
-        # Remove tmp_path - using hardcoded test file
-        recognizer = TextPlaceRecognitionPDF(tmp_path)  # ← NO ARGUMENT!
-        places = recognizer.process_pdf(cfg.rules)
+        # 2. Use a context manager for the file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            # For very large files, stream the read instead of await file.read()
+            while content := await file.read(1024 * 1024): # 1MB chunks
+                tmp.write(content)
+            tmp_path = tmp.name
+
+        # 3. RUN IN THREADPOOL to prevent blocking the event loop
+        recognizer = TextPlaceRecognitionPDF(tmp_path)
+        places = await run_in_threadpool(recognizer.process_pdf, refined_rules)
 
         matches = [
-            RagPdfMatch(
-                id=place["id"],
-                pageIndex=place["page"],
-                rects=place["rects"]
-            )
-            for place in places
+            RagPdfMatch(id=p["id"], pageIndex=p["page"], rects=p["rects"])
+            for p in places
         ]
-
         return AnnotationsResponse(matches=matches)
 
     except Exception as e:
-        import traceback
-        logging.error(f"Error processing PDF: {e}")
-        traceback.print_exc()
+        logging.error(f"Error in annotations: {e}")
         return AnnotationsResponse(matches=[])
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)

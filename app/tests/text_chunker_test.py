@@ -45,11 +45,11 @@ def test_text_chunker_pdf()->None:
 
 @pytest.mark.integration
 def test_text_chunker_txt()->None:
-    txt_result = extract_auto(txt_file)
-    _assert_chunking_works(txt_result)
+    for txt_result in extract_auto(txt_file).values():
+        _assert_chunking_works(txt_result)
 
 
 @pytest.mark.integration
 def test_text_chunker_zip()->None:
-    zip_result = extract_from_zip(zip_file)
-    _assert_chunking_works(zip_result)
+    for zip_result in extract_from_zip(zip_file).values():
+        _assert_chunking_works(zip_result)

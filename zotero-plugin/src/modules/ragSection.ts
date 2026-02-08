@@ -208,16 +208,16 @@ export class RagSection {
             }
           </html:style>
           <div id="rag-root">
-            <div id="rag-tabs-row">
-              <div id="rag-tabs"></div>
-              <html:button id="rag-new-chat">+</html:button>
-            </div>
-        
             <div id="rag-messages"></div>
         
             <div id="rag-input-row">
               <html:input id="rag-query-input" type="text" data-l10n-id="rag-query-input-placeholder"/>
               <html:button id="rag-query-button" data-l10n-id="rag-query-button-label">Ask</html:button>
+            </div>
+
+            <div id="rag-tabs-row">
+              <div id="rag-tabs"></div>
+              <html:button id="rag-new-chat">+</html:button>
             </div>
           </div>
       `,

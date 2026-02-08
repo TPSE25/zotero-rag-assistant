@@ -53,7 +53,7 @@ class TextPlaceRecognitionPDF:
             self._extract_text_ocr()
         return self.pages
 
-    def _extract_text_ocr(self):
+    def _extract_text_ocr(self) -> None:
         """Fallback OCR extraction for scanned/corrupt PDFs."""
         try:
             images = convert_from_path(self.pdf_path)

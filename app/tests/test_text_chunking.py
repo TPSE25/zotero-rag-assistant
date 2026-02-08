@@ -15,7 +15,7 @@ More can be added if necessary at any time.
     ("    Nymeria    ", "Nymeria"),
     ("Jon Snow", "Jon Snow")
 ])
-def test_clean_text_removes_extra_whitespace(text, expected):
+def test_clean_text_removes_extra_whitespace(text: str, expected: str) -> None:
     chunker = TextChunker()
 
     cleaned = chunker.clean_text(text)
@@ -29,7 +29,7 @@ def test_clean_text_removes_extra_whitespace(text, expected):
     ("Liar!", "I have the high ground!"),
     ("Liar!", "Hello there.")
 ])
-def test_estimate_token_count(short, long):
+def test_estimate_token_count(short: str, long: str) -> None:
     chunker = TextChunker()
 
     assert chunker.estimate_token_count(long) > chunker.estimate_token_count(short)
@@ -37,7 +37,7 @@ def test_estimate_token_count(short, long):
 
 # tests if the estimation is zero for an empty text
 @pytest.mark.parametrize("text", [" ", "", "    ", "\n  ", "\t"])
-def test_estimate_token_count_empty(text):
+def test_estimate_token_count_empty(text: str) -> None:
     chunker = TextChunker()
 
     assert chunker.estimate_token_count(text) == 0
@@ -50,7 +50,7 @@ def test_estimate_token_count_empty(text):
     "I have the high ground!",
     "Valar morghulis"
 ])
-def test_chunk_text_single_chunk(text):
+def test_chunk_text_single_chunk(text: str) -> None:
     chunker = TextChunker()
 
     chunks = chunker.chunk_text(text, max_tokens=20)
@@ -64,7 +64,7 @@ def test_chunk_text_single_chunk(text):
     ("Master Skywalker, there are too many of them! What are we going to do?", 7),
     ("Hello there.", 1)
 ])
-def test_chunk_text_multiple_chunks(text, max_tokens):
+def test_chunk_text_multiple_chunks(text: str, max_tokens: int) -> None:
     chunker = TextChunker()
 
     chunks = chunker.chunk_text(text, max_tokens)
@@ -79,7 +79,7 @@ def test_chunk_text_multiple_chunks(text, max_tokens):
     ("Never forget what you are, the rest of the world will not. Wear it like armor, and it can never be used to hurt you.", 2),
     ("Only a sith deals in absolutes.", 4)
 ])
-def test_chunk_text_preserves_all_words(text, max_tokens):
+def test_chunk_text_preserves_all_words(text: str, max_tokens: int) -> None:
     chunker = TextChunker()
 
     chunks = chunker.chunk_text(text, max_tokens)
@@ -95,7 +95,7 @@ def test_chunk_text_preserves_all_words(text, max_tokens):
     ("Never forget what you are, the rest of the world will not. Wear it like armor, and it can never be used to hurt you.", 2),
     ("Only a sith deals in absolutes.", 4)
 ])
-def test_chunk_text_respects_max_tokens(text, max_tokens):
+def test_chunk_text_respects_max_tokens(text: str, max_tokens: int) -> None:
     chunker = TextChunker()
 
     chunks = chunker.chunk_text(text, max_tokens=max_tokens)
@@ -110,7 +110,7 @@ def test_chunk_text_respects_max_tokens(text, max_tokens):
     ("Valyria", 1),
     ("Only a sith deals in absolutes.", 4)
 ])
-def test_chunk_text_no_empty_chunks(text, max_tokens):
+def test_chunk_text_no_empty_chunks(text: str, max_tokens: int) -> None:
     chunker = TextChunker()
 
     chunks = chunker.chunk_text(text, max_tokens)
@@ -125,7 +125,7 @@ def test_chunk_text_no_empty_chunks(text, max_tokens):
     "Winterfell"
     "Hi"
 ])
-def test_single_word_chunking(text):
+def test_single_word_chunking(text: str) -> None:
     chunker = TextChunker()
 
     chunks = chunker.chunk_text(text, max_tokens=1)

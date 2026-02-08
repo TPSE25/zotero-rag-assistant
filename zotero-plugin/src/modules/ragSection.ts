@@ -206,6 +206,21 @@ export class RagSection {
               justify-content: center;
               padding: 0 12px;
             }
+            
+            .rag-tab-title-edit {
+              font: inherit;
+              color: inherit;
+              background: Canvas;
+              box-sizing: border-box;
+            
+              max-width: 130px;
+              width: 130px;
+              padding: 0 6px;
+            
+              border: 1px solid GrayText;
+              border-radius: 6px;
+              height: 20px;
+            }
           </html:style>
           <div id="rag-root">
             <div id="rag-messages"></div>
@@ -239,6 +254,7 @@ export class RagSection {
         if (!tabsEl || !newChatBtn || !messagesEl || !input || !sendBtn) return;
 
         let sessions: ChatSession[] = await this.chatDB.listSessions();
+        let renamingSessionId: string | null = null;
         let currentSessionId: string | null = sessions[0]?.id ?? null;
 
         if (!currentSessionId) {
@@ -246,6 +262,62 @@ export class RagSection {
           sessions = [session];
           currentSessionId = session.id;
         }
+
+        const beginRenameSession = async (s: ChatSession, tab: HTMLElement) => {
+          debugger;
+          if (renamingSessionId) return;
+          renamingSessionId = s.id;
+          tab.dataset.editing = "1";
+
+          const titleEl = tab.querySelector(".rag-tab-title") as HTMLElement | null;
+          if (!titleEl) {
+            renamingSessionId = null;
+            tab.dataset.editing = "0";
+            return;
+          }
+
+          const oldTitle = (s.title ?? "").trim();
+
+          const inputEl = ztoolkit.UI.createElement(body.ownerDocument!, "input") as HTMLInputElement;
+          inputEl.classList.add("rag-tab-title-edit");
+          inputEl.value = oldTitle;
+          inputEl.placeholder = "Chat";
+
+          inputEl.onclick = (e) => e.stopPropagation();
+          inputEl.onmousedown = (e) => e.stopPropagation();
+
+          const finish = async (apply: boolean) => {
+            if (tab.dataset.editing !== "1") return;
+
+            tab.dataset.editing = "0";
+            renamingSessionId = null;
+
+            const nextTitle = inputEl.value.trim();
+
+            if (apply && nextTitle && nextTitle !== oldTitle) {
+              await this.chatDB!.renameSession(s.id, nextTitle);
+            }
+            await renderTabs();
+          };
+
+          inputEl.onkeydown = (e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void finish(true);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              void finish(false);
+            }
+          };
+
+          inputEl.onblur = () => void finish(true);
+
+          tab.replaceChild(inputEl, titleEl);
+
+          inputEl.focus();
+          inputEl.select();
+        };
 
         const renderTabs = async () => {
           sessions = await this.chatDB.listSessions();
@@ -260,6 +332,10 @@ export class RagSection {
             const title = ztoolkit.UI.createElement(body.ownerDocument!, "span");
             title.classList.add("rag-tab-title");
             title.textContent = s.title || "Chat";
+            title.ondblclick = (ev) => {
+              ev.stopPropagation();
+              void beginRenameSession(s, tab);
+            };
             tab.title = s.title || "Chat";
 
             const close = ztoolkit.UI.createElement(body.ownerDocument!, "span");
@@ -281,7 +357,9 @@ export class RagSection {
               await renderMessages();
             };
 
-            tab.onclick = async () => {
+            tab.onclick = async (event) => {
+              if ((event as MouseEvent).detail > 1) return;
+              if (tab.dataset.editing === "1") return;
               currentSessionId = s.id;
               await renderTabs();
               await renderMessages();

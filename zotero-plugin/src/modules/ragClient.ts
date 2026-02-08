@@ -11,10 +11,10 @@ export interface Source {
 }
 
 export type QueryStreamMsg =
-    | { type: "setSources"; sources: Source[] }
-    | { type: "updateProgress"; stage: string; debug?: string; }
-    | { type: "token"; token: string }
-    | { type: "done" };
+  | { type: "setSources"; sources: Source[] }
+  | { type: "updateProgress"; stage: string; debug?: string }
+  | { type: "token"; token: string }
+  | { type: "done" };
 
 export type RagHighlightRule = {
   id: string;
@@ -83,7 +83,10 @@ export class RagClient {
     if (tail) yield JSON.parse(tail) as QueryStreamMsg;
   }
 
-  public async analyzePdf(pdf: string, cfg: RagConfig): Promise<RagAnalyzePdfResponse> {
+  public async analyzePdf(
+    pdf: string,
+    cfg: RagConfig,
+  ): Promise<RagAnalyzePdfResponse> {
     const win = Zotero.getMainWindow();
     const url = `${this.baseUrl}/api/annotations`;
 
@@ -92,7 +95,11 @@ export class RagClient {
     for (let i = 0; i < pdf.length; i++) {
       u8[i] = pdf.charCodeAt(i) & 0xff;
     }
-    fd.append("file", new win.Blob([u8], { type: "application/pdf" }), "document.pdf");
+    fd.append(
+      "file",
+      new win.Blob([u8], { type: "application/pdf" }),
+      "document.pdf",
+    );
     fd.append("config", JSON.stringify(cfg));
 
     const res = await fetch(url, {
@@ -102,7 +109,9 @@ export class RagClient {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`RAG analyzePdf failed: HTTP ${res.status} ${res.statusText} ${body}`);
+      throw new Error(
+        `RAG analyzePdf failed: HTTP ${res.status} ${res.statusText} ${body}`,
+      );
     }
     return (await res.json()) as unknown as RagAnalyzePdfResponse;
   }

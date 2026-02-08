@@ -1,5 +1,5 @@
 import { config } from "../../package.json";
-import {getString} from "./locale";
+import { getString } from "./locale";
 
 type PluginPrefsMap = _ZoteroTypes.Prefs["PluginPrefsMap"];
 
@@ -31,10 +31,10 @@ export function clearPref(key: string) {
 }
 
 export function checkWebDAVOnStart() {
-  const enabled  = Zotero.Prefs.get("sync.storage.enabled");
+  const enabled = Zotero.Prefs.get("sync.storage.enabled");
   const protocol = Zotero.Prefs.get("sync.storage.protocol");
-  const scheme   = Zotero.Prefs.get("sync.storage.scheme");
-  const url      = Zotero.Prefs.get("sync.storage.url");
+  const scheme = Zotero.Prefs.get("sync.storage.scheme");
+  const url = Zotero.Prefs.get("sync.storage.url");
 
   const expected = {
     protocol: "webdav",
@@ -52,25 +52,25 @@ export function checkWebDAVOnStart() {
 
   if (protocol !== expected.protocol) {
     problems.push(
-        getString("webdav-check-protocol-mismatch", {
-          args: { actual: protocol ?? empty, expected: expected.protocol },
-        }),
+      getString("webdav-check-protocol-mismatch", {
+        args: { actual: protocol ?? empty, expected: expected.protocol },
+      }),
     );
   }
 
   if (scheme !== expected.scheme) {
     problems.push(
-        getString("webdav-check-scheme-mismatch", {
-          args: { actual: scheme ?? empty, expected: expected.scheme },
-        }),
+      getString("webdav-check-scheme-mismatch", {
+        args: { actual: scheme ?? empty, expected: expected.scheme },
+      }),
     );
   }
 
   if (url !== expected.url) {
     problems.push(
-        getString("webdav-check-url-mismatch", {
-          args: { actual: url ?? empty, expected: expected.url },
-        }),
+      getString("webdav-check-url-mismatch", {
+        args: { actual: url ?? empty, expected: expected.url },
+      }),
     );
   }
 
@@ -83,24 +83,23 @@ export function checkWebDAVOnStart() {
   });
 
   const buttonFlags =
-      Services.prompt.BUTTON_POS_0! * Services.prompt.BUTTON_TITLE_IS_STRING! +
-      Services.prompt.BUTTON_POS_1! * Services.prompt.BUTTON_TITLE_IS_STRING! +
-      Services.prompt.BUTTON_POS_0_DEFAULT!;
+    Services.prompt.BUTTON_POS_0! * Services.prompt.BUTTON_TITLE_IS_STRING! +
+    Services.prompt.BUTTON_POS_1! * Services.prompt.BUTTON_TITLE_IS_STRING! +
+    Services.prompt.BUTTON_POS_0_DEFAULT!;
 
   const choice = Services.prompt.confirmEx(
-      Zotero.getMainWindow() as unknown as mozIDOMWindowProxy,
-      getString("webdav-check-dialog-title"),
-      msg,
-      buttonFlags,
-      getString("webdav-check-open-settings"),
-      getString("webdav-check-not-now"),
-      "",
-      "",
-      { value: false }, /* unused */
+    Zotero.getMainWindow() as unknown as mozIDOMWindowProxy,
+    getString("webdav-check-dialog-title"),
+    msg,
+    buttonFlags,
+    getString("webdav-check-open-settings"),
+    getString("webdav-check-not-now"),
+    "",
+    "",
+    { value: false } /* unused */,
   );
 
   if (choice === 0) {
     Zotero.Utilities.Internal.openPreferences("zotero-prefpane-sync");
   }
-
 }

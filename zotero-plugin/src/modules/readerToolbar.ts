@@ -1,68 +1,79 @@
 import randomString = Zotero.randomString;
-import {RagConfig} from "./ragClient";
+import { RagConfig } from "./ragClient";
 
 type RagHighlightRule = {
-    id: string;
-    enabled: boolean;
-    colorHex: string;
-    termsRaw: string;
+  id: string;
+  enabled: boolean;
+  colorHex: string;
+  termsRaw: string;
 };
 
 export type RagPopupConfig = {
-    rules: RagHighlightRule[];
+  rules: RagHighlightRule[];
 };
 
 function newRuleId() {
-    return `rule_${randomString(10)}`;
+  return `rule_${randomString(10)}`;
 }
 
 let popupCfg: RagPopupConfig = { rules: [] };
 
 function getPrefKey(): string {
-    const addonRef = addon?.data?.config?.addonRef as string | undefined;
-    const addonID = addon?.data?.config?.addonID as string | undefined;
+  const addonRef = addon?.data?.config?.addonRef as string | undefined;
+  const addonID = addon?.data?.config?.addonID as string | undefined;
 
-    const ns = addonRef
-        ? `extensions.zotero.${addonRef}.`
-        : `extensions.zotero.${(addonID ?? "rag_highlight").replace(/[^a-zA-Z0-9_.-]/g, "_")}.`;
+  const ns = addonRef
+    ? `extensions.zotero.${addonRef}.`
+    : `extensions.zotero.${(addonID ?? "rag_highlight").replace(/[^a-zA-Z0-9_.-]/g, "_")}.`;
 
-    return `${ns}highlightPopupConfig`;
+  return `${ns}highlightPopupConfig`;
 }
 
 function isPopupVisible(popup: HTMLElement): boolean {
-    const win = popup.ownerDocument!.defaultView;
-    if (!win) return popup.style.display !== "none";
-    return win.getComputedStyle(popup)!.display !== "none";
+  const win = popup.ownerDocument!.defaultView;
+  if (!win) return popup.style.display !== "none";
+  return win.getComputedStyle(popup)!.display !== "none";
 }
 
 function loadCfgFromPrefs(): RagPopupConfig {
-    try {
-        const raw = Zotero.Prefs.get(getPrefKey(), true) as string | undefined;
-        return raw ? JSON.parse(raw) : { rules: [{ id: newRuleId(), enabled: true, colorHex: "#ffeb3b", termsRaw: "" }] };
-    } catch (e) {
-        Zotero.debug?.(`RAG: failed to load prefs: ${String(e)}`);
-        return { rules: [] };
-    }
+  try {
+    const raw = Zotero.Prefs.get(getPrefKey(), true) as string | undefined;
+    return raw
+      ? JSON.parse(raw)
+      : {
+          rules: [
+            {
+              id: newRuleId(),
+              enabled: true,
+              colorHex: "#ffeb3b",
+              termsRaw: "",
+            },
+          ],
+        };
+  } catch (e) {
+    Zotero.debug?.(`RAG: failed to load prefs: ${String(e)}`);
+    return { rules: [] };
+  }
 }
 
 function saveCfgToPrefs(cfg: RagPopupConfig) {
-    try {
-        Zotero.Prefs.set(getPrefKey(), JSON.stringify(cfg), true);
-    } catch (e) {
-        Zotero.debug?.(`RAG: failed to save prefs: ${String(e)}`);
-    }
+  try {
+    Zotero.Prefs.set(getPrefKey(), JSON.stringify(cfg), true);
+  } catch (e) {
+    Zotero.debug?.(`RAG: failed to save prefs: ${String(e)}`);
+  }
 }
 
 function safeAppend(doc: Document, el: HTMLElement) {
-    (doc.body || doc.head || doc.documentElement)?.appendChild(el);
+  (doc.body || doc.head || doc.documentElement)?.appendChild(el);
 }
 
 function ensureRagStyles(doc: Document) {
-    if (doc.getElementById("rag-highlight-style")) return;
+  if (doc.getElementById("rag-highlight-style")) return;
 
-    const style = doc.createElement("style");
-    style.id = "rag-highlight-style";
-    style.textContent = `
+  const style = doc.createElement("style");
+  style.id = "rag-highlight-style";
+  style.textContent = `
       .rag-popup {
         position: fixed;
         z-index: 999999;
@@ -176,57 +187,62 @@ function ensureRagStyles(doc: Document) {
       .rag-btn:hover { background: rgba(0,0,0,0.08); }
       .rag-btn--primary { background: rgba(0,0,0,0.08); }
     `;
-    safeAppend(doc, style);
+  safeAppend(doc, style);
 }
 
 function renderRules(popup: HTMLDivElement) {
-    const rulesHost = popup.querySelector<HTMLDivElement>("#rag-rules")!;
-    rulesHost.innerHTML = "";
+  const rulesHost = popup.querySelector<HTMLDivElement>("#rag-rules")!;
+  rulesHost.innerHTML = "";
 
-    for (const rule of popupCfg.rules) {
-        const row = popup.ownerDocument!.createElement("div");
-        row.className = "rag-rule";
-        row.dataset.ruleId = rule.id;
+  for (const rule of popupCfg.rules) {
+    const row = popup.ownerDocument!.createElement("div");
+    row.className = "rag-rule";
+    row.dataset.ruleId = rule.id;
 
-        row.innerHTML = `
+    row.innerHTML = `
           <input type="checkbox" class="rag-rule-enabled" title="Enable rule" />
           <input type="color" class="rag-color rag-rule-color" title="Rule color" />
           <textarea class="rag-rule-terms" placeholder="what to highlight"></textarea>
           <button type="button" class="rag-icon-btn" data-action="remove-rule" title="Remove rule">×</button>
         `;
 
-        (row.querySelector<HTMLInputElement>(".rag-rule-enabled")!).checked = rule.enabled;
-        (row.querySelector<HTMLInputElement>(".rag-rule-color")!).value = rule.colorHex;
-        (row.querySelector<HTMLTextAreaElement>(".rag-rule-terms")!).value = rule.termsRaw;
+    row.querySelector<HTMLInputElement>(".rag-rule-enabled")!.checked =
+      rule.enabled;
+    row.querySelector<HTMLInputElement>(".rag-rule-color")!.value =
+      rule.colorHex;
+    row.querySelector<HTMLTextAreaElement>(".rag-rule-terms")!.value =
+      rule.termsRaw;
 
-        rulesHost.appendChild(row);
-    }
+    rulesHost.appendChild(row);
+  }
 }
 
 function readUiIntoConfig(popup: HTMLDivElement) {
-    const ruleEls = Array.from<HTMLElement>(popup.querySelectorAll("#rag-rules [data-rule-id]"));
-    const rules: RagHighlightRule[] = ruleEls.map(el => {
-        const id = el.dataset.ruleId!;
-        return {
-            id,
-            enabled: (el.querySelector<HTMLInputElement>(".rag-rule-enabled")!).checked,
-            colorHex: (el.querySelector<HTMLInputElement>(".rag-rule-color")!).value,
-            termsRaw: (el.querySelector<HTMLTextAreaElement >(".rag-rule-terms")!).value,
-        };
-    });
+  const ruleEls = Array.from<HTMLElement>(
+    popup.querySelectorAll("#rag-rules [data-rule-id]"),
+  );
+  const rules: RagHighlightRule[] = ruleEls.map((el) => {
+    const id = el.dataset.ruleId!;
+    return {
+      id,
+      enabled: el.querySelector<HTMLInputElement>(".rag-rule-enabled")!.checked,
+      colorHex: el.querySelector<HTMLInputElement>(".rag-rule-color")!.value,
+      termsRaw: el.querySelector<HTMLTextAreaElement>(".rag-rule-terms")!.value,
+    };
+  });
 
-    popupCfg = { rules };
+  popupCfg = { rules };
 }
 
 function ensurePopup(doc: Document, reader: any): HTMLDivElement {
-    const existing = doc.getElementById("rag-highlight-popup");
-    if (existing) return existing as HTMLDivElement;
+  const existing = doc.getElementById("rag-highlight-popup");
+  if (existing) return existing as HTMLDivElement;
 
-    const popup = doc.createElement("div");
-    popup.id = "rag-highlight-popup";
-    popup.className = "rag-popup";
+  const popup = doc.createElement("div");
+  popup.id = "rag-highlight-popup";
+  popup.className = "rag-popup";
 
-    popup.innerHTML = `
+  popup.innerHTML = `
       <div class="rag-popup__header">
         <div class="rag-popup__title">Highlighting</div>
         <button type="button" class="rag-popup__close" id="rag-popup-close" aria-label="Close">×</button>
@@ -244,177 +260,195 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
       </div>
     `;
 
-    safeAppend(doc, popup);
+  safeAppend(doc, popup);
 
-    const close = () => (popup.style.display = "none");
+  const close = () => (popup.style.display = "none");
 
-    popup.querySelector<HTMLButtonElement>("#rag-popup-close")!.addEventListener("click", close);
+  popup
+    .querySelector<HTMLButtonElement>("#rag-popup-close")!
+    .addEventListener("click", close);
 
-    if (!popup.dataset.ragDocBound) {
-        popup.dataset.ragDocBound = "1";
+  if (!popup.dataset.ragDocBound) {
+    popup.dataset.ragDocBound = "1";
 
-        doc.addEventListener("keydown", (e: KeyboardEvent) => {
-            if (e.key === "Escape") close();
-        });
+    doc.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    });
 
-        doc.addEventListener("mousedown", (e: MouseEvent) => {
-            if (isPopupVisible(popup) && !popup.contains(e.target as Node)) close();
-        });
+    doc.addEventListener("mousedown", (e: MouseEvent) => {
+      if (isPopupVisible(popup) && !popup.contains(e.target as Node)) close();
+    });
+  }
+
+  popup.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const removeBtn = target.closest(
+      "[data-action='remove-rule']",
+    ) as HTMLButtonElement | null;
+    if (!removeBtn) return;
+
+    const ruleEl = removeBtn.closest("[data-rule-id]") as HTMLElement | null;
+    const ruleId = ruleEl?.dataset.ruleId;
+    if (!ruleId) return;
+
+    popupCfg.rules = popupCfg.rules.filter((r) => r.id !== ruleId);
+    renderRules(popup);
+  });
+
+  popup
+    .querySelector<HTMLButtonElement>("#rag-add-rule")!
+    .addEventListener("click", () => {
+      popupCfg.rules.push({
+        id: newRuleId(),
+        enabled: true,
+        colorHex: "#90caf9",
+        termsRaw: "",
+      });
+      renderRules(popup);
+    });
+
+  popup.querySelector("#rag-save")!.addEventListener("click", () => {
+    readUiIntoConfig(popup);
+    saveCfgToPrefs(popupCfg);
+    close();
+  });
+  popup.querySelector("#rag-execute")!.addEventListener("click", async () => {
+    const executeBtn = popup.querySelector<HTMLButtonElement>("#rag-execute")!;
+    const oldLabel = executeBtn.textContent ?? "Execute";
+
+    try {
+      executeBtn.disabled = true;
+      executeBtn.textContent = "Working…";
+
+      readUiIntoConfig(popup);
+      saveCfgToPrefs(popupCfg);
+
+      const { RagClient } = await import("./ragClient");
+      const { readCurrentPdf, createHighlightsFromAnalyzeResponse } =
+        await import("./ragZoteroAnnotations");
+      const pdfBlob = await readCurrentPdf(reader);
+      const client = new RagClient();
+      const request: RagConfig = {
+        rules: popupCfg.rules
+          .filter((r) => r.enabled)
+          .map((r) => ({ id: r.id, termsRaw: r.termsRaw })),
+      };
+      const resp = await client.analyzePdf(pdfBlob, request);
+      const created = await createHighlightsFromAnalyzeResponse(
+        reader,
+        popupCfg,
+        resp,
+      );
+      reader._iframeWindow?.console?.log?.(
+        `RAG: created ${created} annotations`,
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Zotero.debug?.(`RAG execute failed: ${msg}`);
+      reader._iframeWindow?.alert?.(`RAG failed: ${msg}`);
+    } finally {
+      executeBtn.disabled = false;
+      executeBtn.textContent = oldLabel;
     }
+  });
 
-    popup.addEventListener("click", (e) => {
-        const target = e.target as HTMLElement;
-        const removeBtn = target.closest("[data-action='remove-rule']") as HTMLButtonElement | null;
-        if (!removeBtn) return;
-
-        const ruleEl = removeBtn.closest("[data-rule-id]") as HTMLElement | null;
-        const ruleId = ruleEl?.dataset.ruleId;
-        if (!ruleId) return;
-
-        popupCfg.rules = popupCfg.rules.filter((r) => r.id !== ruleId);
-        renderRules(popup);
-    });
-
-    popup.querySelector<HTMLButtonElement>("#rag-add-rule")!.addEventListener("click", () => {
-        popupCfg.rules.push({
-            id: newRuleId(),
-            enabled: true,
-            colorHex: "#90caf9",
-            termsRaw: "",
-        });
-        renderRules(popup);
-    });
-
-    popup.querySelector("#rag-save")!.addEventListener("click", () => {
-        readUiIntoConfig(popup);
-        saveCfgToPrefs(popupCfg);
-        close();
-    });
-    popup.querySelector("#rag-execute")!.addEventListener("click", async () => {
-        const executeBtn = popup.querySelector<HTMLButtonElement>("#rag-execute")!;
-        const oldLabel = executeBtn.textContent ?? "Execute";
-
-        try {
-            executeBtn.disabled = true;
-            executeBtn.textContent = "Working…";
-
-            readUiIntoConfig(popup);
-            saveCfgToPrefs(popupCfg);
-
-            const { RagClient } = await import("./ragClient");
-            const { readCurrentPdf, createHighlightsFromAnalyzeResponse } = await import("./ragZoteroAnnotations");
-            const pdfBlob = await readCurrentPdf(reader);
-            const client = new RagClient();
-            const request: RagConfig = {
-                rules: popupCfg.rules
-                    .filter((r) => r.enabled)
-                    .map((r) => ({ id: r.id, termsRaw: r.termsRaw }))
-            };
-            const resp = await client.analyzePdf(pdfBlob, request);
-            const created = await createHighlightsFromAnalyzeResponse(reader, popupCfg, resp);
-            reader._iframeWindow?.console?.log?.(`RAG: created ${created} annotations`);
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            Zotero.debug?.(`RAG execute failed: ${msg}`);
-            reader._iframeWindow?.alert?.(`RAG failed: ${msg}`);
-        } finally {
-            executeBtn.disabled = false;
-            executeBtn.textContent = oldLabel;
-        }
-    });
-
-    return popup;
+  return popup;
 }
 
 function openPopupNearButton(popup: HTMLDivElement, btn: HTMLElement) {
-    popup.style.display = "block";
+  popup.style.display = "block";
 
-    const rect = btn.getBoundingClientRect();
-    const margin = 8;
+  const rect = btn.getBoundingClientRect();
+  const margin = 8;
 
-    const win = popup.ownerDocument!.defaultView!;
-    const maxX = win.innerWidth - popup.offsetWidth - margin;
-    const maxY = win.innerHeight - popup.offsetHeight - margin;
+  const win = popup.ownerDocument!.defaultView!;
+  const maxX = win.innerWidth - popup.offsetWidth - margin;
+  const maxY = win.innerHeight - popup.offsetHeight - margin;
 
-    popup.style.left = `${Math.max(margin, Math.min(rect.left, maxX))}px`;
-    popup.style.top = `${Math.max(margin, Math.min(rect.bottom + margin, maxY))}px`;
+  popup.style.left = `${Math.max(margin, Math.min(rect.left, maxX))}px`;
+  popup.style.top = `${Math.max(margin, Math.min(rect.bottom + margin, maxY))}px`;
 }
 
 type RenderToolbarEvent = {
-    reader: any;
-    doc: Document;
-    params: {};
-    append: (...nodes: Array<Node | string>) => void; // appendDOM
-    type: "renderToolbar";
+  reader: any;
+  doc: Document;
+  params: object;
+  append: (...nodes: Array<Node | string>) => void; // appendDOM
+  type: "renderToolbar";
 };
-let toolbarHandler: ((event: RenderToolbarEvent) => void | Promise<void>) | undefined;
-
+let toolbarHandler:
+  | ((event: RenderToolbarEvent) => void | Promise<void>)
+  | undefined;
 
 export function registerReaderToolbarButton() {
-    if (toolbarHandler) return;
+  if (toolbarHandler) return;
 
-    toolbarHandler = (event) => {
-        const { reader, doc, append } = event;
+  toolbarHandler = (event) => {
+    const { reader, doc, append } = event;
 
-        if ((reader as any).type && (reader as any).type !== "pdf") return;
-        if (doc.getElementById("rag-highlight-button")) return;
+    if ((reader as any).type && (reader as any).type !== "pdf") return;
+    if (doc.getElementById("rag-highlight-button")) return;
 
-        ensureRagStyles(doc);
+    ensureRagStyles(doc);
 
-        const btn = doc.createElement("button");
-        btn.id = "rag-highlight-button";
-        btn.classList.add("toolbar-button");
-        btn.title = "Highlighting";
+    const btn = doc.createElement("button");
+    btn.id = "rag-highlight-button";
+    btn.classList.add("toolbar-button");
+    btn.title = "Highlighting";
 
-        const svgNS = "http://www.w3.org/2000/svg";
-        const svg = doc.createElementNS(svgNS, "svg") as unknown as SVGSVGElement;
-        svg.setAttribute("width", "20");
-        svg.setAttribute("height", "20");
-        svg.setAttribute("viewBox", "0 0 24 24");
-        svg.setAttribute("fill", "none");
-        svg.setAttribute("stroke", "currentColor");
-        svg.setAttribute("stroke-width", "2");
-        svg.setAttribute("stroke-linecap", "round");
-        svg.setAttribute("stroke-linejoin", "round");
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = doc.createElementNS(svgNS, "svg") as unknown as SVGSVGElement;
+    svg.setAttribute("width", "20");
+    svg.setAttribute("height", "20");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
 
-        const paths = [
-            "M9 11l-5 5V19h3l5-5",
-            "M9 11l7-7 4 4-7 7",
-            "M15 5l4 4",
-            "M19 15h3",
-            "M19 19h3",
-        ];
+    const paths = [
+      "M9 11l-5 5V19h3l5-5",
+      "M9 11l7-7 4 4-7 7",
+      "M15 5l4 4",
+      "M19 15h3",
+      "M19 19h3",
+    ];
 
-        for (const d of paths) {
-            const path = doc.createElementNS(svgNS, "path");
-            path.setAttribute("d", d);
-            svg.appendChild(path);
-        }
+    for (const d of paths) {
+      const path = doc.createElementNS(svgNS, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    }
 
-        svg.style.display = "block";
-        svg.style.margin = "auto";
-        btn.appendChild(svg);
+    svg.style.display = "block";
+    svg.style.margin = "auto";
+    btn.appendChild(svg);
 
-        btn.addEventListener("click", () => {
-            popupCfg = loadCfgFromPrefs();
-            const popup = ensurePopup(doc, reader);
+    btn.addEventListener("click", () => {
+      popupCfg = loadCfgFromPrefs();
+      const popup = ensurePopup(doc, reader);
 
-            if (isPopupVisible(popup)) {
-                popup.style.display = "none";
-                return;
-            }
-            renderRules(popup);
-            openPopupNearButton(popup, btn);
-        });
+      if (isPopupVisible(popup)) {
+        popup.style.display = "none";
+        return;
+      }
+      renderRules(popup);
+      openPopupNearButton(popup, btn);
+    });
 
-        append(btn);
-    };
+    append(btn);
+  };
 
-    Zotero.Reader.registerEventListener("renderToolbar", toolbarHandler, addon.data.config.addonID);
+  Zotero.Reader.registerEventListener(
+    "renderToolbar",
+    toolbarHandler,
+    addon.data.config.addonID,
+  );
 }
 
 export function unregisterReaderToolbarButton() {
-    if (!toolbarHandler) return;
-    Zotero.Reader.unregisterEventListener("renderToolbar", toolbarHandler);
-    toolbarHandler = undefined;
+  if (!toolbarHandler) return;
+  Zotero.Reader.unregisterEventListener("renderToolbar", toolbarHandler);
+  toolbarHandler = undefined;
 }

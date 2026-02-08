@@ -1,5 +1,5 @@
 import type { RagAnalyzePdfResponse } from "./ragClient";
-import {RagPopupConfig} from "./readerToolbar";
+import { RagPopupConfig } from "./readerToolbar";
 
 function pad(num: number, width: number) {
   const s = String(Math.max(0, Math.floor(num)));
@@ -19,7 +19,10 @@ export async function readCurrentPdf(reader: any): Promise<string> {
   }
 
   const path = attachment.getFilePath();
-  if (!path) throw new Error("PDF attachment has no local file path (linked file missing?)");
+  if (!path)
+    throw new Error(
+      "PDF attachment has no local file path (linked file missing?)",
+    );
 
   return await Zotero.File.getBinaryContentsAsync(path);
 }
@@ -27,7 +30,7 @@ export async function readCurrentPdf(reader: any): Promise<string> {
 export async function createHighlightsFromAnalyzeResponse(
   reader: any,
   cfg: RagPopupConfig,
-  resp: RagAnalyzePdfResponse
+  resp: RagAnalyzePdfResponse,
 ): Promise<number> {
   const attachment: Zotero.Item = reader._item;
 

@@ -1,9 +1,12 @@
 import { RagSection } from "./modules/ragSection";
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
-import {registerReaderToolbarButton, unregisterReaderToolbarButton} from "./modules/readerToolbar";
-import {pickOutputDir} from "./utils/picker";
-import {checkWebDAVOnStart} from "./utils/prefs";
+import {
+  registerReaderToolbarButton,
+  unregisterReaderToolbarButton,
+} from "./modules/readerToolbar";
+import { pickOutputDir } from "./utils/picker";
+import { checkWebDAVOnStart } from "./utils/prefs";
 
 async function onStartup() {
   await Promise.all([
@@ -51,7 +54,7 @@ async function onPrefsEvent(type: string, { window }: { window: Window }) {
 
 function onShutdown(): void {
   ztoolkit.unregisterAll();
-  unregisterReaderToolbarButton()
+  unregisterReaderToolbarButton();
   addon.data.dialog?.window?.close();
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
@@ -63,5 +66,5 @@ export default {
   onShutdown,
   onMainWindowLoad,
   onMainWindowUnload,
-  onPrefsEvent
+  onPrefsEvent,
 };

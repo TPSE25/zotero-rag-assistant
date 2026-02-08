@@ -15,4 +15,13 @@ export type FluentMessageId =
   | 'rag-query-input-placeholder'
   | 'rag-section-header'
   | 'rag-section-sidenav'
-  | 'rag-sources-header';
+  | 'rag-sources-header'
+  | 'webdav-check-dialog-body'
+  | 'webdav-check-dialog-title'
+  | 'webdav-check-disabled'
+  | 'webdav-check-empty'
+  | 'webdav-check-not-now'
+  | 'webdav-check-open-settings'
+  | 'webdav-check-protocol-mismatch'
+  | 'webdav-check-scheme-mismatch'
+  | 'webdav-check-url-mismatch';

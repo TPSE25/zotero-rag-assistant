@@ -3,6 +3,7 @@ import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
 import {registerReaderToolbarButton, unregisterReaderToolbarButton} from "./modules/readerToolbar";
 import {pickOutputDir} from "./utils/picker";
+import {checkWebDAVOnStart} from "./utils/prefs";
 
 async function onStartup() {
   await Promise.all([
@@ -26,6 +27,7 @@ async function onStartup() {
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
   addon.data.initialized = true;
+  checkWebDAVOnStart();
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {

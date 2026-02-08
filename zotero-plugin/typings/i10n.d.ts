@@ -3,14 +3,25 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'chat-new-title'
   | 'error-prefix'
   | 'pref-apiBaseUrl'
+  | 'pref-browse'
   | 'pref-help'
+  | 'pref-outputDir'
   | 'prefs-title'
   | 'querying-message'
-  | 'rag-chat-new-title'
   | 'rag-query-button-label'
   | 'rag-query-input-placeholder'
   | 'rag-section-header'
   | 'rag-section-sidenav'
-  | 'rag-sources-header';
+  | 'sources-header'
+  | 'webdav-check-dialog-body'
+  | 'webdav-check-dialog-title'
+  | 'webdav-check-disabled'
+  | 'webdav-check-empty'
+  | 'webdav-check-not-now'
+  | 'webdav-check-open-settings'
+  | 'webdav-check-protocol-mismatch'
+  | 'webdav-check-scheme-mismatch'
+  | 'webdav-check-url-mismatch';

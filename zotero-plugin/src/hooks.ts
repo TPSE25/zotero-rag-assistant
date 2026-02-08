@@ -1,7 +1,12 @@
 import { RagSection } from "./modules/ragSection";
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
-import {registerReaderToolbarButton, unregisterReaderToolbarButton} from "./modules/readerToolbar";
+import {
+  registerReaderToolbarButton,
+  unregisterReaderToolbarButton,
+} from "./modules/readerToolbar";
+import { pickOutputDir } from "./utils/picker";
+import { checkWebDAVOnStart } from "./utils/prefs";
 
 async function onStartup() {
   await Promise.all([
@@ -24,10 +29,8 @@ async function onStartup() {
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
-
-  // Mark initialized as true to confirm plugin loading status
-  // outside of the plugin (e.g. scaffold testing process)
   addon.data.initialized = true;
+  checkWebDAVOnStart();
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
@@ -43,23 +46,25 @@ async function onMainWindowUnload(win: Window): Promise<void> {
   addon.data.dialog?.window?.close();
 }
 
+async function onPrefsEvent(type: string, { window }: { window: Window }) {
+  if (type !== "load") return;
+  const btn = window.document.getElementById("chatOutputDirBtn");
+  btn?.addEventListener("click", async () => await pickOutputDir(window));
+}
+
 function onShutdown(): void {
   ztoolkit.unregisterAll();
-  unregisterReaderToolbarButton()
+  unregisterReaderToolbarButton();
   addon.data.dialog?.window?.close();
-  // Remove addon object
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
   delete Zotero[addon.data.config.addonInstance];
 }
-
-// Add your hooks here. For element click, etc.
-// Keep in mind hooks only do dispatch. Don't add code that does real jobs in hooks.
-// Otherwise the code would be hard to read and maintain.
 
 export default {
   onStartup,
   onShutdown,
   onMainWindowLoad,
   onMainWindowUnload,
+  onPrefsEvent,
 };

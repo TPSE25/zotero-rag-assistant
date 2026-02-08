@@ -6,7 +6,9 @@ import asyncio
 from fastapi.concurrency import run_in_threadpool
 from text_place_recognition_pdf import TextPlaceRecognitionPDF
 
-from typing import Dict, List, Any, Tuple, Literal, Optional, Annotated, Union
+from typing import Dict, List, Any, Tuple, Literal, Optional, Annotated, Union, cast
+from collections.abc import Mapping, Sequence, AsyncIterator
+from chromadb.api.types import SparseVector, QueryResult, GetResult
 from fastapi.responses import StreamingResponse
 
 from chromadb.api.models.Collection import Collection
@@ -17,6 +19,10 @@ import chromadb
 
 from file_extractor import extract_auto
 from text_chunking import TextChunker
+
+MetadataValue = str | int | float | bool | SparseVector | None
+ChromaMetadata = Mapping[str, MetadataValue]
+Embedding = Sequence[float] | Sequence[int]
 
 app = FastAPI()
 
@@ -110,28 +116,39 @@ async def get_query_hits(prompt: str, n_results: int = 20) -> List[Hit]:
     collection = _get_or_create_chroma_collection()
     client = _create_ollama_client()
     response = await client.embed(model="nomic-embed-text", input=prompt)
-    embeddings = list(response.embeddings[0])
-    res = collection.query(
-        query_embeddings=[embeddings],
+    query_embedding: Embedding = cast(Sequence[float], response.embeddings[0])
+    res: QueryResult = collection.query(
+        query_embeddings=query_embedding,
         n_results=n_results,
-        include=["documents", "metadatas"],
+        include=["documents", "metadatas"]
     )
-    hits = [create_hit(doc, metadata) for doc, metadata in zip(res["documents"][0], res["metadatas"][0])]
+    docs = res["documents"]
+    metas = res["metadatas"]
+    if docs is None or metas is None:
+        return []
+    if len(docs) == 0 or len(metas) == 0:
+        return []
+    docs0 = docs[0]
+    metas0 = metas[0]
+    hits = [create_hit(doc, metadata) for doc, metadata in zip(docs0, metas0)]
     neighbor_ids = _get_neighbor_ids(hits)
-
     if neighbor_ids:
-        n_res = collection.get(ids=list(neighbor_ids), include=["documents", "metadatas"])
-        hits += [create_hit(doc, metadata) for doc, metadata in zip(n_res["documents"], n_res["metadatas"])]
+        n_res: GetResult = collection.get(ids=list(neighbor_ids), include=["documents", "metadatas"])
+        n_docs = n_res["documents"]
+        n_metas = n_res["metadatas"]
+        if n_docs is not None and n_metas is not None:
+            hits += [create_hit(doc, metadata) for doc, metadata in zip(n_docs, n_metas)]
 
     return hits
 
 
-def create_hit(doc: str, metadata: Dict[str, Any]) -> Hit:
+
+def create_hit(doc: str, metadata: Mapping[str, Any]) -> Hit:
     return Hit(
         text=doc,
-        filename=metadata["filename"],
-        zotero_id=metadata["zotero_id"],
-        chunk_index=metadata["chunk_index"]
+        filename=cast(str, metadata["filename"]),
+        zotero_id=cast(str, metadata["zotero_id"]),
+        chunk_index=cast(int, metadata["chunk_index"]),
     )
 
 
@@ -192,7 +209,7 @@ Rules:
 
 @app.post("/api/query")
 async def query(body: QueryIn) -> StreamingResponse:
-    async def gen():
+    async def gen() -> AsyncIterator[str]:
         yield _ndjson(UpdateProgressEvent(stage="search_hits"))
         hits = await get_query_hits(body.prompt)
         context, sources = format_sources_by_file(hits)
@@ -257,14 +274,15 @@ async def file_changed_hook(
             continue
 
         response = await client.embed(model="nomic-embed-text", input=chunks)
-        embeddings = response.embeddings
+        embeddings: list[Embedding] = [
+            cast(Sequence[float], e) for e in response.embeddings
+        ]
 
         ids = [_document_id(zotero_id, fname, i) for i in range(len(chunks))]
-        metadatas = [{
-            "filename": fname,
-            "zotero_id": zotero_id,
-            "chunk_index": i,
-        } for i in range(len(chunks))]
+        metadatas: list[ChromaMetadata] = [
+            {"filename": fname, "zotero_id": zotero_id, "chunk_index": i}
+            for i in range(len(chunks))
+        ]
 
         collection.add(
             ids=ids,
@@ -298,19 +316,26 @@ class RagHighlightRule(BaseModel):
 class RagPopupConfig(BaseModel):
     rules: list[RagHighlightRule]
 
+def _normalize_rects(rects: list[tuple[float, float, float, float] | None]) -> List[List[float]]:
+    out: List[List[float]] = []
+    for r in rects:
+        if r is None:
+            continue
+        out.append([float(x) for x in r])
+    return out
 
 @app.post("/api/annotations", response_model=AnnotationsResponse)
 async def annotations(
     file: UploadFile = File(...),
     config: str = Form(...),
-    ollama_client: AsyncClient = Depends(_create_ollama_client) 
+    ollama_client: AsyncClient = Depends(_create_ollama_client)
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
     if not cfg.rules:
         return AnnotationsResponse(matches=[])
 
     # 1. Parallelize AI expansions
-    async def get_refined_rule(rule):
+    async def get_refined_rule(rule: RagHighlightRule) -> RagHighlightRule:
         try:
             response = await ollama_client.generate(
                 model="llama3.2:latest",
@@ -324,7 +349,7 @@ async def annotations(
 
     refined_rules = await asyncio.gather(*(get_refined_rule(r) for r in cfg.rules))
 
-    tmp_path = None 
+    tmp_path = None
     try:
         # 2. Use a context manager for the file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -338,8 +363,12 @@ async def annotations(
         places = await run_in_threadpool(recognizer.process_pdf, refined_rules)
 
         matches = [
-            RagPdfMatch(id=p["id"], pageIndex=p["page"], rects=p["rects"])
-            for p in places
+            RagPdfMatch(
+                id=place["id"],
+                pageIndex=place["page"],
+                rects=_normalize_rects(cast(list[tuple[float, float, float, float] | None], place["rects"])),
+            )
+            for place in places
         ]
         return AnnotationsResponse(matches=matches)
 

@@ -1,10 +1,10 @@
 {
-  "name": "zotero-plugin-template",
+  "name": "zotero-rag-assistant",
   "type": "module",
-  "version": "3.1.0",
-  "description": "Zotero Plugin Template",
+  "version": "0.0.2",
+  "description": "Chat with Your Library + AI-Powered PDF Annotations",
   "config": {
-    "addonName": "zotero-rag-assistant",
+    "addonName": "RAG assistant",
     "addonID": "zotero-rag-assistant",
     "addonRef": "rag",
     "addonInstance": "rag",
@@ -12,13 +12,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/windingwind/zotero-plugin-template.git"
+    "url": "git+https://github.com/TPSE25/zotero-rag-assistant.git"
   },
-  "author": "windingwind",
+  "author": "TPSE25",
   "bugs": {
-    "url": "https://github.com/windingwind/zotero-plugin-template/issues"
+    "url": "https://github.com/TPSE25/zotero-rag-assistant/issues/"
   },
-  "homepage": "https://github.com/windingwind/zotero-plugin-template#readme",
+  "homepage": "https://github.com/TPSE25/zotero-rag-assistant",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",

@@ -46,6 +46,7 @@ async def startup_event():
 async def ensure_model_installed(model_name: str) -> bool:
     try:
         client = _create_ollama_client()
+        resp = await client.list()
         installed_models = [m.model for m in resp.models if m.model is not None]
 
         if model_name in installed_models:

@@ -26,6 +26,9 @@ Embedding = Sequence[float] | Sequence[int]
 
 app = FastAPI()
 
+ANSWER_MODEL = os.getenv("ANSWER_MODEL", "llama3.2:latest")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+
 logging.basicConfig(
     level=logging.INFO,
     handlers=[logging.StreamHandler(sys.stdout)],
@@ -115,7 +118,7 @@ def _document_id(zotero_id: str, filename: str, idx: int) -> str:
 async def get_query_hits(prompt: str, n_results: int = 20) -> List[Hit]:
     collection = _get_or_create_chroma_collection()
     client = _create_ollama_client()
-    response = await client.embed(model="nomic-embed-text", input=prompt)
+    response = await client.embed(model=EMBEDDING_MODEL, input=prompt)
     query_embedding: Embedding = cast(Sequence[float], response.embeddings[0])
     res: QueryResult = collection.query(
         query_embeddings=query_embedding,
@@ -222,7 +225,7 @@ SOURCES:
 {context}
 """
         yield _ndjson(UpdateProgressEvent(stage="generate_start", debug=context))
-        async for part in await client.generate(model="llama3.2:latest", prompt=enriched, system=SYSTEM_PROMPT, stream=True):
+        async for part in await client.generate(model=ANSWER_MODEL, prompt=enriched, system=SYSTEM_PROMPT, stream=True):
             print(part)
             yield _ndjson(TokenEvent(token=part["response"]))
         yield _ndjson(DoneEvent())
@@ -273,7 +276,7 @@ async def file_changed_hook(
             logging.info(f"No chunks extracted from {fname}")
             continue
 
-        response = await client.embed(model="nomic-embed-text", input=chunks)
+        response = await client.embed(model=EMBEDDING_MODEL, input=chunks)
         embeddings: list[Embedding] = [
             cast(Sequence[float], e) for e in response.embeddings
         ]
@@ -338,7 +341,7 @@ async def annotations(
     async def get_refined_rule(rule: RagHighlightRule) -> RagHighlightRule:
         try:
             response = await ollama_client.generate(
-                model="llama3.2:latest",
+                model=ANSWER_MODEL,
                 prompt=f"Provide 3-5 keywords for: {rule.termsRaw}. Return only comma-separated words.",
                 stream=False
             )

@@ -4,6 +4,8 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      - ANSWER_MODEL=gemma3:27b
+      - EMBEDDING_MODEL=qwen3-embedding:8b
   ollama:
     image: docker.io/ollama/ollama:latest
     container_name: ollama

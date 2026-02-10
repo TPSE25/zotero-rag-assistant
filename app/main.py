@@ -34,6 +34,32 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    answer_model_installed = await ensure_model_installed(ANSWER_MODEL)
+    embedding_model_installed = await ensure_model_installed(EMBEDDING_MODEL)
+    if not answer_model_installed:
+        logging.warning(f"Failed to install answer model: {ANSWER_MODEL}")
+    if not embedding_model_installed:
+        logging.warning(f"Failed to install embedding model: {EMBEDDING_MODEL}")
+
+async def ensure_model_installed(model_name: str) -> bool:
+    try:
+        client = _create_ollama_client()
+        installed_models = [m.model for m in resp.models if m.model is not None]
+
+        if model_name in installed_models:
+            logging.info(f"Model {model_name} is already installed")
+            return True
+
+        logging.info(f"Model {model_name} not found, installing...")
+        await client.pull(model=model_name)
+        logging.info(f"Successfully installed model {model_name}")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to install model {model_name}: {e}")
+        return False
+
 @app.get("/api/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok"}

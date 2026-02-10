@@ -16,11 +16,8 @@ services:
       - ollama_models:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
+    devices:
+      - nvidia.com/gpu=all
     # for amd we might need to link /dev/kfd, /dev/dri etc
 volumes:
   ollama_models:

@@ -85,7 +85,17 @@ def _create_chroma_client() -> chromadb.ClientAPI:
 
 def _get_or_create_chroma_collection() -> Collection:
     chroma_client = _create_chroma_client()
-    return chroma_client.get_or_create_collection("embeddings")
+    collection = chroma_client.get_or_create_collection("embeddings")
+
+    if collection.metadata is None or "embedding_model" not in collection.metadata:
+        collection.modify(metadata={"embedding_model": EMBEDDING_MODEL})
+        logging.info(f"Stored embedding model name: {EMBEDDING_MODEL}")
+    elif collection.metadata.get("embedding_model") != EMBEDDING_MODEL:
+        old_model = collection.metadata.get("embedding_model")
+        logging.error(f"Embedding model changed from {old_model} to {EMBEDDING_MODEL}")
+        raise ValueError(f"Embedding model changed from {old_model} to {EMBEDDING_MODEL}. Please reset the collection before changing models.")
+
+    return collection
 
 @app.get("/api/chroma-stats")
 async def chroma_stats() -> Dict[str, Any]:

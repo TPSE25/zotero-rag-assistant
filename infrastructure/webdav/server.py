@@ -2,6 +2,7 @@ import logging
 import os
 import httpx
 import sys
+import signal
 from wsgidav.wsgidav_app import WsgiDAVApp
 from wsgidav.dir_browser import WsgiDavDirBrowser
 from cheroot import wsgi
@@ -62,4 +63,8 @@ if __name__ == "__main__":
     app = NotificationMiddleware(WsgiDAVApp(config))
     print(f"Serving WebDAV on port {PORT}")
     server = wsgi.Server(("0.0.0.0", PORT), app)
+
+    signal.signal(signal.SIGTERM, lambda sig, frame: server.stop())
+    signal.signal(signal.SIGINT, lambda sig, frame: server.stop())
+
     server.start()

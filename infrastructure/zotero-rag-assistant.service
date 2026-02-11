@@ -1,0 +1,18 @@
+[Unit]
+Description=Zotero RAG Assistant (podman-compose)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=%h/zotero-rag-assistant/infrastructure
+
+ExecStartPre=/usr/bin/podman-compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans
+ExecStart=/usr/bin/podman-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+ExecStop=/usr/bin/podman-compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans
+
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target

@@ -2,7 +2,7 @@ import { RagClient } from "./ragClient";
 import { getString } from "../utils/locale";
 import { ChatDB, ChatMessage, ChatSession } from "./ragStorage";
 import { showZoteroSource } from "./openSource";
-import { assert } from "chai";
+import { assert } from "../utils/assert";
 
 export class RagSection {
   private static ragClient = new RagClient();

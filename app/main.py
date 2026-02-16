@@ -4,7 +4,7 @@ import sys
 import tempfile
 import asyncio
 from fastapi.concurrency import run_in_threadpool
-from text_place_recognition_pdf import TextPlaceRecognitionPDF
+
 
 from typing import Dict, List, Any, Tuple, Literal, Optional, Annotated, Union, cast
 from collections.abc import Mapping, Sequence, AsyncIterator
@@ -19,6 +19,7 @@ import chromadb
 
 from file_extractor import extract_auto
 from text_chunking import TextChunker
+from llm_annotation import process_annotations as process_annotations_llm
 
 MetadataValue = str | int | float | bool | SparseVector | None
 ChromaMetadata = Mapping[str, MetadataValue]
@@ -374,41 +375,29 @@ async def annotations(
     if not cfg.rules:
         return AnnotationsResponse(matches=[])
 
-    # 1. Parallelize AI expansions
-    async def get_refined_rule(rule: RagHighlightRule) -> RagHighlightRule:
-        try:
-            response = await ollama_client.generate(
-                model=ANSWER_MODEL,
-                prompt=f"Provide 3-5 keywords for: {rule.termsRaw}. Return only comma-separated words.",
-                stream=False
-            )
-            ai_words = response['response'].strip()
-            return RagHighlightRule(id=rule.id, termsRaw=f"{rule.termsRaw}, {ai_words}")
-        except Exception:
-            return rule # Fallback to original rule if AI fails
-
-    refined_rules = await asyncio.gather(*(get_refined_rule(r) for r in cfg.rules))
-
     tmp_path = None
     try:
-        # 2. Use a context manager for the file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            # For very large files, stream the read instead of await file.read()
-            while content := await file.read(1024 * 1024): # 1MB chunks
+            while content := await file.read(1024 * 1024): 
                 tmp.write(content)
             tmp_path = tmp.name
 
-        # 3. RUN IN THREADPOOL to prevent blocking the event loop
-        recognizer = TextPlaceRecognitionPDF(tmp_path)
-        places = await run_in_threadpool(recognizer.process_pdf, refined_rules)
+
+        
+        matches_data = await process_annotations_llm(
+            pdf_path=tmp_path,
+            rules=cfg.rules,
+            answer_model=ANSWER_MODEL,
+            ollama_client=ollama_client
+        )
 
         matches = [
             RagPdfMatch(
-                id=place["id"],
-                pageIndex=place["page"],
-                rects=_normalize_rects(cast(list[tuple[float, float, float, float] | None], place["rects"])),
+                id=m["id"],
+                pageIndex=m["page"],
+                rects=_normalize_rects(cast(list[tuple[float, float, float, float] | None], m["rects"])),
             )
-            for place in places
+            for m in matches_data
         ]
         return AnnotationsResponse(matches=matches)
 

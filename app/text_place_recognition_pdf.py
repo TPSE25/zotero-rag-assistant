@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Protocol, Sequence, TypedDict, TypeAlias
+from typing import Any, Optional, Protocol, Sequence, TypedDict
 
 import pdfplumber
 from pdf2image import convert_from_path
@@ -9,7 +9,7 @@ import pytesseract # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
-Rect: TypeAlias = tuple[float, float, float, float]
+Rect = tuple[float, float, float, float]
 
 
 class WordData(TypedDict):
@@ -23,15 +23,7 @@ class PageData(TypedDict):
     words: list[WordData]
 
 
-class PlaceMatch(TypedDict):
-    id: Any
-    page: int
-    rects: list[Optional[Rect]]
 
-
-class RuleLike(Protocol):
-    id: Any
-    termsRaw: str
 
 
 class TextPlaceRecognitionPDF:
@@ -105,44 +97,3 @@ class TextPlaceRecognitionPDF:
                 })
         except Exception as e:
             logger.error(f"OCR extraction failed: {e}")
-
-    def recognize_places(self, pages: Sequence[PageData], rules: Sequence[RuleLike]) -> list[PlaceMatch]:
-        """Optimized search for large documents."""
-        results: list[PlaceMatch] = []
-
-        # 1. Pre-process rules ONCE (Major performance win for large papers)
-        processed_rules = []
-        for rule in rules:
-            keywords = [k.strip().lower() for k in rule.termsRaw.split(",") if k.strip()]
-            processed_rules.append({"id": rule.id, "keywords": keywords})
-        for page in pages:
-            page_words = page["words"]
-            # 2. Create a 'flat' version of page text for a quick initial check
-            page_text_lower = " ".join([w["text"] for w in page_words]).lower()
-
-            for rule_data in processed_rules:
-                matched_rects = []
-
-                for term in rule_data["keywords"]:
-                    # 3. Only loop through word objects if the term exists on the page
-                    if term in page_text_lower:
-                        for word in page_words:
-                            if not word.get("rect"):
-                                continue
-
-                            word_text = word["text"].lower()
-                            # Exact match or substring match for longer terms
-                            if term == word_text or (len(term) > 3 and term in word_text):
-                                matched_rects.append(word["rect"])
-
-                if matched_rects:
-                    results.append({
-                        "id": rule_data["id"],
-                        "page": page["page"],
-                        "rects": matched_rects # Group all rects for this rule on this page
-                    })
-        return results
-
-    def process_pdf(self, rules: Sequence[RuleLike]) -> list[PlaceMatch]:
-        pages = self.extract_text()
-        return self.recognize_places(pages, rules)

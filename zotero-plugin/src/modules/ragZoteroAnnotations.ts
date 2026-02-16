@@ -39,6 +39,10 @@ export async function createHighlightsFromAnalyzeResponse(
   for (const match of resp.matches) {
     const key = Zotero.Utilities.generateObjectKey();
     const now = new Date().toISOString();
+    const rule = cfg.rules.find((r) => r.id === match.id);
+    if (rule === undefined) {
+      throw new Error("Unknown id " + match.id);
+    }
     const annJson: any = {
       id: key,
       key,
@@ -48,7 +52,7 @@ export async function createHighlightsFromAnalyzeResponse(
       text: "",
       comment: "RAG",
       pageLabel: String(match.pageIndex + 1),
-      color: cfg.rules.find((r) => r.id === match.id)?.colorHex,
+      color: rule.colorHex,
       sortIndex: buildSortIndex(match.pageIndex, match.rects),
       position: { pageIndex: match.pageIndex, rects: match.rects },
       dateModified: now,

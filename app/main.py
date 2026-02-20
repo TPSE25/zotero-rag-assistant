@@ -13,8 +13,6 @@ from fastapi.responses import StreamingResponse
 
 from chromadb.api.models.Collection import Collection
 from fastapi import FastAPI, HTTPException, UploadFile, Form, File,Depends
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Gauge
 from pydantic import BaseModel, Field
 from ollama import AsyncClient
 import chromadb
@@ -29,12 +27,8 @@ Embedding = Sequence[float] | Sequence[int]
 
 app = FastAPI()
 
-Instrumentator().instrument(app).expose(app, endpoint='/api/metrics')
-
 ANSWER_MODEL = os.getenv("ANSWER_MODEL", "llama3.2:latest")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
-
-CHROMA_DOC_COUNT = Gauge("chroma_document_count", "Number of documents in the Chroma collection")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -109,11 +103,9 @@ def _get_or_create_chroma_collection() -> Collection:
 async def chroma_stats() -> Dict[str, Any]:
     try:
         collection = _get_or_create_chroma_collection()
-        count = collection.count()
-        CHROMA_DOC_COUNT.set(count)
         return {
             "name": collection.name,
-            "count": count,
+            "count": collection.count(),
             "metadata": collection.metadata,
         }
     except Exception as e:
@@ -339,7 +331,6 @@ async def file_changed_hook(
             documents=chunks,
             metadatas=metadatas
         )
-        CHROMA_DOC_COUNT.set(collection.count())
         logging.info(f"Successfully indexed {len(chunks)} chunks for {fname}")
 
 class RagPdfMatch(BaseModel):

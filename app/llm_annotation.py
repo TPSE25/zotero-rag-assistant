@@ -71,7 +71,7 @@ async def process_annotations(
     if not all_tokens:
         return []
 
-    chunks = _create_chunks(all_tokens, chunk_size=800, overlap=100)
+    chunks = _create_chunks(all_tokens, chunk_size=1600, overlap=150)
     
 
     tasks = [

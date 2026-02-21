@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, List, Optional, Protocol
 
 from ollama import AsyncClient
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from text_place_recognition_pdf import TextPlaceRecognitionPDF, Rect
 
@@ -283,18 +283,22 @@ async def _llm_find_relevant_sentences(
     rule_descriptions = "\n".join([f'- ID "{r.id}": {r.termsRaw}' for r in rules])
     sentence_block = "\n".join([f"[{s.sid}] {s.text}" for s in chunk.sentences])
 
-    prompt = f"""You are an advanced document analyzer.
+    prompt = f"""You are an annotation assistant for research papers.
 
 Task:
-Find which sentences discuss the meaning of each rule.
+For each rule, select sentence IDs that contain direct evidence for highlighting.
+
+A sentence is a match only if it contains text that should be highlighted in the PDF for that rule.
+Do NOT select sentences that are only loosely related.
 
 Rules:
 {rule_descriptions}
 
 Instructions:
+- Include sentences with direct evidence for the rule.
 - Return ONLY sentence IDs from the provided list (e.g. "S3", "S4").
+- If a rule is not directly evidenced, do not include it.
 - A rule can match multiple sentences.
-- Include all relevant sentences, but do not add unrelated ones.
 - Do not return quotes.
 - Do not invent sentence IDs.
 - If a rule is not present, do not include it.
@@ -328,13 +332,16 @@ async def _llm_refine_span_boundaries(
     token_lines = "\n".join(f"[{i}] {t.text}" for i, t in enumerate(candidate_tokens))
     plain_text = " ".join(t.text for t in candidate_tokens)
 
-    prompt = f"""You are selecting an exact token span that evidences a rule.
+    prompt = f"""You are selecting an exact token span to highlight in a research paper.
 
 Rule:
 - ID "{rule.id}": {rule.termsRaw}
 
+Task:
+Select the smallest CONTIGUOUS token span that is still self-contained and directly evidences the rule.
+
 Instructions:
-- Select the SMALLEST contiguous token span that directly evidences the rule.
+- The span should read like a meaningful phrase or clause, not just a keyword.
 - Return token indices only (start_token, end_token).
 - The indices refer to the token list below.
 - start_token and end_token must be valid and satisfy start_token <= end_token.

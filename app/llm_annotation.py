@@ -60,9 +60,13 @@ class LLMCoarseResponse(BaseModel):
     matches: List[CoarseMatchResult] = Field(default_factory=list)
 
 
-class LLMBoundaryResponse(BaseModel):
+class LLMBoundarySpan(BaseModel):
     start_token: int
     end_token: int
+
+
+class LLMBoundaryResponse(BaseModel):
+    spans: List[LLMBoundarySpan] = Field(default_factory=list)
 
 
 
@@ -249,7 +253,7 @@ async def _process_chunk(
 
             candidate_tokens = chunk.tokens[local_start:local_end + 1]
 
-            boundary = await _llm_refine_span_boundaries(
+            boundaries = await _llm_refine_span_boundaries(
                 rule=rule_map[hit.rule_id],
                 candidate_tokens=candidate_tokens,
                 model=model,
@@ -258,30 +262,26 @@ async def _process_chunk(
                 debug_events=debug_events
             )
 
-            if boundary is None:
+            if boundaries is None:
                 exact_matches.append(ExactSpanMatch(
                     rule_id=hit.rule_id,
                     start_token=local_start,
                     end_token=local_end
                 ))
                 continue
-
-            start_token = local_start + boundary.start_token
-            end_token = local_start + boundary.end_token
-
-            if start_token < 0 or end_token >= len(chunk.tokens) or start_token > end_token:
-                exact_matches.append(ExactSpanMatch(
-                    rule_id=hit.rule_id,
-                    start_token=local_start,
-                    end_token=local_end
-                ))
+            if not boundaries:
                 continue
 
-            exact_matches.append(ExactSpanMatch(
-                rule_id=hit.rule_id,
-                start_token=start_token,
-                end_token=end_token
-            ))
+            for boundary in boundaries:
+                start_token = local_start + boundary.start_token
+                end_token = local_start + boundary.end_token
+                if start_token < 0 or end_token >= len(chunk.tokens) or start_token > end_token:
+                    continue
+                exact_matches.append(ExactSpanMatch(
+                    rule_id=hit.rule_id,
+                    start_token=start_token,
+                    end_token=end_token
+                ))
 
     return exact_matches
 
@@ -347,7 +347,7 @@ async def _llm_refine_span_boundaries(
         client: AsyncClient,
         chunk_start_index: int,
         debug_events: Optional[List[dict[str, Any]]] = None,
-) -> Optional[LLMBoundaryResponse]:
+) -> Optional[List[LLMBoundarySpan]]:
     if not candidate_tokens:
         return None
 
@@ -380,14 +380,22 @@ async def _llm_refine_span_boundaries(
         parsed = LLMBoundaryResponse.model_validate(data)
         parsed_payload = parsed.model_dump()
 
-        if parsed.start_token < 0 or parsed.end_token < 0:
-            return None
-        if parsed.start_token > parsed.end_token:
-            return None
-        if parsed.end_token >= len(candidate_tokens):
-            return None
+        valid_spans: List[LLMBoundarySpan] = []
+        seen_spans: set[tuple[int, int]] = set()
+        for span in parsed.spans:
+            if span.start_token < 0 or span.end_token < 0:
+                continue
+            if span.start_token > span.end_token:
+                continue
+            if span.end_token >= len(candidate_tokens):
+                continue
+            key = (span.start_token, span.end_token)
+            if key in seen_spans:
+                continue
+            seen_spans.add(key)
+            valid_spans.append(span)
 
-        return parsed
+        return valid_spans
 
     except Exception as e:
         error_text = str(e)

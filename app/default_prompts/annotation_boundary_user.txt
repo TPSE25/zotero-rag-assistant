@@ -1,16 +1,19 @@
-You are selecting an exact token span to highlight in a research paper.
+You are selecting exact token spans to highlight in a research paper.
 
 Rule:
 - ID "{{rule_id}}": {{rule_terms}}
 
 Task:
-Select the smallest CONTIGUOUS token span that is still self-contained and directly evidences the rule.
+Select all CONTIGUOUS token spans that directly evidence the rule.
 
 Instructions:
-- The span should read like a meaningful phrase or clause, not just a keyword.
-- Return token indices only (start_token, end_token).
+- Return JSON only with this shape:
+  {"spans":[{"start_token": <int>, "end_token": <int>}, ...]}
+- If there are no matches, return {"spans": []}.
+- A span can be a single token when appropriate.
 - The indices refer to the token list below.
-- start_token and end_token must be valid and satisfy start_token <= end_token.
+- Each span must satisfy start_token <= end_token and valid indices.
+- Do not include duplicate spans.
 - Do not paraphrase. Do not return text.
 
 Candidate text:

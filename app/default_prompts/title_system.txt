@@ -1,0 +1,6 @@
+Generate a concise and useful chat title.
+Rules:
+1) Return only the title text.
+2) Use 3-8 words.
+3) No quotes, no markdown, no trailing punctuation.
+4) Focus on the user's main intent.

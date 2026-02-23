@@ -1,0 +1,20 @@
+You are selecting an exact token span to highlight in a research paper.
+
+Rule:
+- ID "{{rule_id}}": {{rule_terms}}
+
+Task:
+Select the smallest CONTIGUOUS token span that is still self-contained and directly evidences the rule.
+
+Instructions:
+- The span should read like a meaningful phrase or clause, not just a keyword.
+- Return token indices only (start_token, end_token).
+- The indices refer to the token list below.
+- start_token and end_token must be valid and satisfy start_token <= end_token.
+- Do not paraphrase. Do not return text.
+
+Candidate text:
+{{plain_text}}
+
+Tokens:
+{{token_lines}}

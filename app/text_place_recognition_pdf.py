@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Protocol, Sequence, TypedDict
+from typing import Any, Optional, TypedDict
 
 import pdfplumber
 from pdf2image import convert_from_path

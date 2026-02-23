@@ -34,7 +34,7 @@ logging.basicConfig(
 )
 
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
     answer_model_installed = await ensure_model_installed(ANSWER_MODEL)
     embedding_model_installed = await ensure_model_installed(EMBEDDING_MODEL)
     if not answer_model_installed:

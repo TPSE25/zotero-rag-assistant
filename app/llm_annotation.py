@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, List, Optional, Protocol
 
@@ -66,7 +67,7 @@ class LLMBoundaryResponse(BaseModel):
 
 async def process_annotations(
     pdf_path: str,
-    rules: List[RuleLike],
+    rules: Sequence[RuleLike],
     answer_model: str,
     ollama_client: AsyncClient
 ) -> List[dict[str, Any]]:
@@ -200,7 +201,7 @@ def _create_sentences(tokens: List[Token], max_tokens_per_sentence: int = 80) ->
 
 async def _process_chunk(
         chunk: Chunk,
-        rules: List[RuleLike],
+        rules: Sequence[RuleLike],
         model: str,
         client: AsyncClient
 ) -> List[ExactSpanMatch]:
@@ -276,7 +277,7 @@ async def _process_chunk(
 
 async def _llm_find_relevant_sentences(
         chunk: Chunk,
-        rules: List[RuleLike],
+        rules: Sequence[RuleLike],
         model: str,
         client: AsyncClient
 ) -> List[CoarseMatchResult]:

@@ -1,4 +1,5 @@
 import { getPref } from "../utils/prefs";
+import { normalizeApiBaseUrl } from "../utils/serverConfig";
 
 export interface QueryIn {
   prompt: string;
@@ -50,7 +51,7 @@ export type RagAnalyzePdfResponse = {
 
 export class RagClient {
   private get baseUrl(): string {
-    return getPref("apiBaseUrl") || "http://localhost:8080";
+    return normalizeApiBaseUrl(getPref("apiBaseUrl"));
   }
 
   public async *query(prompt: string): AsyncGenerator<QueryStreamMsg> {

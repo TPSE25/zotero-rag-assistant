@@ -1,5 +1,6 @@
 import { config } from "../../package.json";
 import { getString } from "./locale";
+import { getExpectedWebDavUrl, normalizeApiBaseUrl } from "./serverConfig";
 
 type PluginPrefsMap = _ZoteroTypes.Prefs["PluginPrefsMap"];
 
@@ -39,7 +40,7 @@ export function checkWebDAVOnStart() {
   const expected = {
     protocol: "webdav",
     scheme: "http",
-    url: "localhost:8080/webdav",
+    url: getExpectedWebDavUrl(normalizeApiBaseUrl(getPref("apiBaseUrl"))),
   };
 
   const empty = getString("webdav-check-empty");

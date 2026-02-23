@@ -398,6 +398,7 @@ class RagPdfMatch(BaseModel):
 
 class AnnotationsResponse(BaseModel):
     matches: List[RagPdfMatch]
+    llmDebug: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 
@@ -429,9 +430,10 @@ async def annotations(
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
     if not cfg.rules:
-        return AnnotationsResponse(matches=[])
+        return AnnotationsResponse(matches=[], llmDebug=[])
 
     tmp_path = None
+    llm_debug: List[Dict[str, Any]] = []
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             while content := await file.read(1024 * 1024): 
@@ -444,7 +446,8 @@ async def annotations(
             pdf_path=tmp_path,
             rules=cfg.rules,
             answer_model=ANSWER_MODEL,
-            ollama_client=ollama_client
+            ollama_client=ollama_client,
+            debug_events=llm_debug
         )
 
         matches = [
@@ -455,11 +458,11 @@ async def annotations(
             )
             for m in matches_data
         ]
-        return AnnotationsResponse(matches=matches)
+        return AnnotationsResponse(matches=matches, llmDebug=llm_debug)
 
     except Exception as e:
         logging.error(f"Error in annotations: {e}")
-        return AnnotationsResponse(matches=[])
+        return AnnotationsResponse(matches=[], llmDebug=llm_debug)
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)

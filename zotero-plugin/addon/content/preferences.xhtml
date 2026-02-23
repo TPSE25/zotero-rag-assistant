@@ -1,6 +1,33 @@
 <linkset>
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
+<html:style>
+  .rag-prompts-root {
+    margin-top: 10px;
+    gap: 8px;
+  }
+
+  .rag-prompt-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .rag-prompt-title {
+    font-size: 1.12em;
+    font-weight: 700;
+  }
+
+  .rag-placeholder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rag-placeholder-item {
+    white-space: normal;
+  }
+</html:style>
 <groupbox
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
 >
@@ -27,6 +54,41 @@
 
     <html:button id="chatOutputDirBtn" data-l10n-id="pref-browse"></html:button>
   </hbox>
+  <vbox class="rag-prompts-root">
+    <html:label data-l10n-id="pref-prompts-title"></html:label>
+    <html:label data-l10n-id="pref-prompts-help"></html:label>
+    <html:label data-l10n-id="pref-prompts-global-hint"></html:label>
+
+    <html:div class="rag-prompt-group">
+      <html:label class="rag-prompt-title" for="ragPrompt-query_system" data-l10n-id="pref-prompts-query"></html:label>
+      <html:textarea id="ragPrompt-query_system" rows="10" style="width: 100%"></html:textarea>
+      <html:div class="rag-placeholder-list" id="ragPromptHelp-query_system"></html:div>
+    </html:div>
+
+    <html:div class="rag-prompt-group">
+      <html:label class="rag-prompt-title" for="ragPrompt-title_system" data-l10n-id="pref-prompts-titlegen"></html:label>
+      <html:textarea id="ragPrompt-title_system" rows="6" style="width: 100%"></html:textarea>
+      <html:div class="rag-placeholder-list" id="ragPromptHelp-title_system"></html:div>
+    </html:div>
+
+    <html:div class="rag-prompt-group">
+      <html:label class="rag-prompt-title" for="ragPrompt-annotation_coarse_user" data-l10n-id="pref-prompts-anno-coarse"></html:label>
+      <html:textarea id="ragPrompt-annotation_coarse_user" rows="10" style="width: 100%"></html:textarea>
+      <html:div class="rag-placeholder-list" id="ragPromptHelp-annotation_coarse_user"></html:div>
+    </html:div>
+
+    <html:div class="rag-prompt-group">
+      <html:label class="rag-prompt-title" for="ragPrompt-annotation_boundary_user" data-l10n-id="pref-prompts-anno-boundary"></html:label>
+      <html:textarea id="ragPrompt-annotation_boundary_user" rows="10" style="width: 100%"></html:textarea>
+      <html:div class="rag-placeholder-list" id="ragPromptHelp-annotation_boundary_user"></html:div>
+    </html:div>
+
+    <hbox>
+      <html:button id="ragPromptsReloadBtn" data-l10n-id="pref-prompts-reload"></html:button>
+      <html:button id="ragPromptsSaveBtn" data-l10n-id="pref-prompts-save"></html:button>
+    </hbox>
+    <html:label id="ragPromptsStatus"></html:label>
+  </vbox>
 </groupbox>
 <vbox>
   <html:label

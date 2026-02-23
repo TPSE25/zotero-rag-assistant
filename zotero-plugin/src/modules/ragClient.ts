@@ -4,6 +4,19 @@ export interface QueryIn {
   prompt: string;
 }
 
+export interface ChatTitleMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatTitleIn {
+  messages: ChatTitleMessage[];
+}
+
+export interface ChatTitleOut {
+  title: string | null;
+}
+
 export interface Source {
   id: string;
   filename: string;
@@ -114,5 +127,26 @@ export class RagClient {
       );
     }
     return (await res.json()) as unknown as RagAnalyzePdfResponse;
+  }
+
+  public async generateChatTitle(
+    messages: ChatTitleMessage[],
+  ): Promise<string | null> {
+    const url = `${this.baseUrl}/api/chat-title`;
+    const body: ChatTitleIn = { messages };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      throw new Error(`RAG title API error (${res.status}): ${errorText}`);
+    }
+
+    const out = (await res.json()) as unknown as ChatTitleOut;
+    const title = (out?.title ?? "").trim();
+    return title || null;
   }
 }

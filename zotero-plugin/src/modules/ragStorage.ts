@@ -7,6 +7,7 @@ export interface ChatSession {
   id: string;
   title: string;
   createdAt: number;
+  isTitleUserSet: boolean;
 }
 
 export interface ChatMessage {
@@ -28,9 +29,26 @@ export class ChatDB {
 
   private dbPromise: Promise<IDBDatabase> | null = null;
   private idbFactory: IDBFactory;
+  private static DEFAULT_TITLE = "New chat";
 
   constructor(idbFactory: IDBFactory) {
     this.idbFactory = idbFactory;
+  }
+
+  private normalizeSession(s: Partial<ChatSession> & { id: string }): ChatSession {
+    const title = typeof s.title === "string" ? s.title : ChatDB.DEFAULT_TITLE;
+    const createdAt =
+      typeof s.createdAt === "number" ? s.createdAt : Date.now();
+    const isTitleUserSet =
+      typeof s.isTitleUserSet === "boolean"
+        ? s.isTitleUserSet
+        : !!title.trim() && title.trim() !== ChatDB.DEFAULT_TITLE;
+    return {
+      id: s.id,
+      title,
+      createdAt,
+      isTitleUserSet,
+    };
   }
 
   private getOutputDir(): string {
@@ -149,21 +167,28 @@ export class ChatDB {
       const store = tx.objectStore("sessions");
       const idx = store.index("by_updatedAt");
       const req = idx.getAll();
-      const sessions = await reqToPromise<ChatSession[]>(req);
-      return sessions.sort((a, b) => b.createdAt - a.createdAt);
+      const sessions = await reqToPromise<Array<Partial<ChatSession> & { id: string }>>(req);
+      const normalized = sessions.map((s) => this.normalizeSession(s));
+      return normalized.sort((a, b) => b.createdAt - a.createdAt);
     });
   }
 
   async getSession(id: string): Promise<ChatSession | null> {
     return this.tx(["sessions"], "readonly", async (tx) => {
       const req = tx.objectStore("sessions").get(id);
-      return (await reqToPromise<ChatSession | undefined>(req)) ?? null;
+      const session = await reqToPromise<(Partial<ChatSession> & { id: string }) | undefined>(req);
+      return session ? this.normalizeSession(session) : null;
     });
   }
 
   async createSession(title = "New chat"): Promise<ChatSession> {
     const now = Date.now();
-    const session: ChatSession = { id: gen_uid(), title, createdAt: now };
+    const session: ChatSession = {
+      id: gen_uid(),
+      title,
+      createdAt: now,
+      isTitleUserSet: false,
+    };
     await this.tx(["sessions"], "readwrite", async (tx) => {
       tx.objectStore("sessions").put(session);
     });
@@ -171,15 +196,23 @@ export class ChatDB {
     return session;
   }
 
-  async renameSession(sessionId: string, title: string): Promise<void> {
+  async renameSession(
+    sessionId: string,
+    title: string,
+    isTitleUserSet = true,
+  ): Promise<void> {
     await this.tx(["sessions"], "readwrite", async (tx) => {
       const store = tx.objectStore("sessions");
       const s =
-        (await reqToPromise<ChatSession | undefined>(store.get(sessionId))) ??
+        (await reqToPromise<(Partial<ChatSession> & { id: string }) | undefined>(
+          store.get(sessionId),
+        )) ??
         null;
       if (!s) return;
-      s.title = title;
-      store.put(s);
+      const next = this.normalizeSession(s);
+      next.title = title;
+      next.isTitleUserSet = isTitleUserSet;
+      store.put(next);
     });
     await this.writeSessionToDisk(sessionId);
   }

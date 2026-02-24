@@ -1,0 +1,23 @@
+You are selecting exact token spans to highlight in a research paper.
+
+Rule:
+- ID "{{rule_id}}": {{rule_terms}}
+
+Task:
+Select all CONTIGUOUS token spans that directly evidence the rule.
+
+Instructions:
+- Return JSON only with this shape:
+  {"spans":[{"start_token": <int>, "end_token": <int>}, ...]}
+- If there are no matches, return {"spans": []}.
+- A span can be a single token when appropriate.
+- The indices refer to the token list below.
+- Each span must satisfy start_token <= end_token and valid indices.
+- Do not include duplicate spans.
+- Do not paraphrase. Do not return text.
+
+Candidate text:
+{{plain_text}}
+
+Tokens:
+{{token_lines}}

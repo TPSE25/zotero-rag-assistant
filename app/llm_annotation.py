@@ -11,6 +11,7 @@ from typing import Any, List, Optional, Protocol
 from ollama import AsyncClient
 from pydantic import BaseModel, Field
 
+from prompt_store import render_prompt
 from text_place_recognition_pdf import TextPlaceRecognitionPDF, Rect
 
 logger = logging.getLogger(__name__)
@@ -59,9 +60,13 @@ class LLMCoarseResponse(BaseModel):
     matches: List[CoarseMatchResult] = Field(default_factory=list)
 
 
-class LLMBoundaryResponse(BaseModel):
+class LLMBoundarySpan(BaseModel):
     start_token: int
     end_token: int
+
+
+class LLMBoundaryResponse(BaseModel):
+    spans: List[LLMBoundarySpan] = Field(default_factory=list)
 
 
 
@@ -69,7 +74,8 @@ async def process_annotations(
     pdf_path: str,
     rules: Sequence[RuleLike],
     answer_model: str,
-    ollama_client: AsyncClient
+    ollama_client: AsyncClient,
+    debug_events: Optional[List[dict[str, Any]]] = None,
 ) -> List[dict[str, Any]]:
 
     recognizer = TextPlaceRecognitionPDF(pdf_path)
@@ -93,7 +99,7 @@ async def process_annotations(
     chunks = _create_chunks(all_tokens, chunk_size=1600, overlap=150)
 
     tasks = [
-        _process_chunk(chunk, rules, answer_model, ollama_client)
+        _process_chunk(chunk, rules, answer_model, ollama_client, debug_events)
         for chunk in chunks
     ]
     chunk_results = await asyncio.gather(*tasks)
@@ -203,13 +209,20 @@ async def _process_chunk(
         chunk: Chunk,
         rules: Sequence[RuleLike],
         model: str,
-        client: AsyncClient
+        client: AsyncClient,
+        debug_events: Optional[List[dict[str, Any]]] = None,
 ) -> List[ExactSpanMatch]:
     if not chunk.sentences:
         return []
 
     try:
-        coarse_hits = await _llm_find_relevant_sentences(chunk, rules, model, client)
+        coarse_hits = await _llm_find_relevant_sentences(
+            chunk,
+            rules,
+            model,
+            client,
+            debug_events
+        )
     except Exception as e:
         logger.error("Error in coarse sentence selection: %s", e)
         return []
@@ -240,37 +253,35 @@ async def _process_chunk(
 
             candidate_tokens = chunk.tokens[local_start:local_end + 1]
 
-            boundary = await _llm_refine_span_boundaries(
+            boundaries = await _llm_refine_span_boundaries(
                 rule=rule_map[hit.rule_id],
                 candidate_tokens=candidate_tokens,
                 model=model,
-                client=client
+                client=client,
+                chunk_start_index=chunk.start_index,
+                debug_events=debug_events
             )
 
-            if boundary is None:
+            if boundaries is None:
                 exact_matches.append(ExactSpanMatch(
                     rule_id=hit.rule_id,
                     start_token=local_start,
                     end_token=local_end
                 ))
                 continue
-
-            start_token = local_start + boundary.start_token
-            end_token = local_start + boundary.end_token
-
-            if start_token < 0 or end_token >= len(chunk.tokens) or start_token > end_token:
-                exact_matches.append(ExactSpanMatch(
-                    rule_id=hit.rule_id,
-                    start_token=local_start,
-                    end_token=local_end
-                ))
+            if not boundaries:
                 continue
 
-            exact_matches.append(ExactSpanMatch(
-                rule_id=hit.rule_id,
-                start_token=start_token,
-                end_token=end_token
-            ))
+            for boundary in boundaries:
+                start_token = local_start + boundary.start_token
+                end_token = local_start + boundary.end_token
+                if start_token < 0 or end_token >= len(chunk.tokens) or start_token > end_token:
+                    continue
+                exact_matches.append(ExactSpanMatch(
+                    rule_id=hit.rule_id,
+                    start_token=start_token,
+                    end_token=end_token
+                ))
 
     return exact_matches
 
@@ -279,106 +290,133 @@ async def _llm_find_relevant_sentences(
         chunk: Chunk,
         rules: Sequence[RuleLike],
         model: str,
-        client: AsyncClient
+        client: AsyncClient,
+        debug_events: Optional[List[dict[str, Any]]] = None,
 ) -> List[CoarseMatchResult]:
     rule_descriptions = "\n".join([f'- ID "{r.id}": {r.termsRaw}' for r in rules])
     sentence_block = "\n".join([f"[{s.sid}] {s.text}" for s in chunk.sentences])
 
-    prompt = f"""You are an annotation assistant for research papers.
-
-Task:
-For each rule, select sentence IDs that contain direct evidence for highlighting.
-
-A sentence is a match only if it contains text that should be highlighted in the PDF for that rule.
-Do NOT select sentences that are only loosely related.
-
-Rules:
-{rule_descriptions}
-
-Instructions:
-- Include sentences with direct evidence for the rule.
-- Return ONLY sentence IDs from the provided list (e.g. "S3", "S4").
-- If a rule is not directly evidenced, do not include it.
-- A rule can match multiple sentences.
-- Do not return quotes.
-- Do not invent sentence IDs.
-- If a rule is not present, do not include it.
-
-Sentences:
-{sentence_block}
-"""
-
-    response = await client.chat(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        format=LLMCoarseResponse.model_json_schema(),
-        options={"temperature": 0.0}
+    prompt = render_prompt(
+        "annotation_coarse_user",
+        {
+            "rule_descriptions": rule_descriptions,
+            "sentence_block": sentence_block,
+        },
     )
 
-    raw = response["message"]["content"]
-    data = _parse_json_from_llm(raw)
-    parsed = LLMCoarseResponse.model_validate(data)
-    return parsed.matches
+    request_payload: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "format": LLMCoarseResponse.model_json_schema(),
+        "options": {"temperature": 0.0},
+    }
+    raw: Optional[str] = None
+    parsed_payload: Optional[dict[str, Any]] = None
+    error_text: Optional[str] = None
+    try:
+        response = await client.chat(**request_payload)
+        raw = response["message"]["content"]
+        data = _parse_json_from_llm(raw)
+        parsed = LLMCoarseResponse.model_validate(data)
+        parsed_payload = parsed.model_dump()
+        return parsed.matches
+    except Exception as e:
+        error_text = str(e)
+        raise
+    finally:
+        if debug_events is not None:
+            event: dict[str, Any] = {
+                "stage": "coarse_sentence_selection",
+                "chunkStartIndex": chunk.start_index,
+                "request": request_payload,
+            }
+            if raw is not None:
+                event["response"] = {"raw": raw}
+            if parsed_payload is not None:
+                event.setdefault("response", {})
+                event["response"]["parsed"] = parsed_payload
+            if error_text is not None:
+                event["error"] = error_text
+            debug_events.append(event)
 
 
 async def _llm_refine_span_boundaries(
         rule: RuleLike,
         candidate_tokens: List[Token],
         model: str,
-        client: AsyncClient
-) -> Optional[LLMBoundaryResponse]:
+        client: AsyncClient,
+        chunk_start_index: int,
+        debug_events: Optional[List[dict[str, Any]]] = None,
+) -> Optional[List[LLMBoundarySpan]]:
     if not candidate_tokens:
         return None
 
     token_lines = "\n".join(f"[{i}] {t.text}" for i, t in enumerate(candidate_tokens))
     plain_text = " ".join(t.text for t in candidate_tokens)
 
-    prompt = f"""You are selecting an exact token span to highlight in a research paper.
+    prompt = render_prompt(
+        "annotation_boundary_user",
+        {
+            "rule_id": rule.id,
+            "rule_terms": rule.termsRaw,
+            "plain_text": plain_text,
+            "token_lines": token_lines,
+        },
+    )
 
-Rule:
-- ID "{rule.id}": {rule.termsRaw}
-
-Task:
-Select the smallest CONTIGUOUS token span that is still self-contained and directly evidences the rule.
-
-Instructions:
-- The span should read like a meaningful phrase or clause, not just a keyword.
-- Return token indices only (start_token, end_token).
-- The indices refer to the token list below.
-- start_token and end_token must be valid and satisfy start_token <= end_token.
-- Do not paraphrase. Do not return text.
-
-Candidate text:
-{plain_text}
-
-Tokens:
-{token_lines}
-"""
-
+    request_payload: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "format": LLMBoundaryResponse.model_json_schema(),
+        "options": {"temperature": 0.0},
+    }
+    raw: Optional[str] = None
+    parsed_payload: Optional[dict[str, Any]] = None
+    error_text: Optional[str] = None
     try:
-        response = await client.chat(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            format=LLMBoundaryResponse.model_json_schema(),
-            options={"temperature": 0.0}
-        )
-
+        response = await client.chat(**request_payload)
         raw = response["message"]["content"]
         data = _parse_json_from_llm(raw)
         parsed = LLMBoundaryResponse.model_validate(data)
+        parsed_payload = parsed.model_dump()
 
-        if parsed.start_token < 0 or parsed.end_token < 0:
-            return None
-        if parsed.start_token > parsed.end_token:
-            return None
-        if parsed.end_token >= len(candidate_tokens):
-            return None
+        valid_spans: List[LLMBoundarySpan] = []
+        seen_spans: set[tuple[int, int]] = set()
+        for span in parsed.spans:
+            if span.start_token < 0 or span.end_token < 0:
+                continue
+            if span.start_token > span.end_token:
+                continue
+            if span.end_token >= len(candidate_tokens):
+                continue
+            key = (span.start_token, span.end_token)
+            if key in seen_spans:
+                continue
+            seen_spans.add(key)
+            valid_spans.append(span)
 
-        return parsed
+        return valid_spans
 
     except Exception as e:
+        error_text = str(e)
         logger.warning("Boundary refinement failed for rule %s: %s", rule.id, e)
         return None
+    finally:
+        if debug_events is not None:
+            event: dict[str, Any] = {
+                "stage": "boundary_refinement",
+                "chunkStartIndex": chunk_start_index,
+                "ruleId": rule.id,
+                "request": request_payload,
+            }
+            if raw is not None:
+                event["response"] = {"raw": raw}
+            if parsed_payload is not None:
+                event.setdefault("response", {})
+                event["response"]["parsed"] = parsed_payload
+            if error_text is not None:
+                event["error"] = error_text
+            debug_events.append(event)
 
 
 def _group_contiguous_sentence_ids(

@@ -7,6 +7,7 @@ import {
 } from "./modules/readerToolbar";
 import { pickOutputDir } from "./utils/picker";
 import { checkWebDAVOnStart } from "./utils/prefs";
+import { initPromptSettings } from "./modules/promptSettings";
 
 async function onStartup() {
   await Promise.all([
@@ -50,6 +51,7 @@ async function onPrefsEvent(type: string, { window }: { window: Window }) {
   if (type !== "load") return;
   const btn = window.document.getElementById("chatOutputDirBtn");
   btn?.addEventListener("click", async () => await pickOutputDir(window));
+  await initPromptSettings(window);
 }
 
 function onShutdown(): void {

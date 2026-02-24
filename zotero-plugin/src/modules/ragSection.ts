@@ -1,4 +1,4 @@
-import { RagClient } from "./ragClient";
+import { ChatTitleMessage, RagClient } from "./ragClient";
 import { getString } from "../utils/locale";
 import { ChatDB, ChatMessage, ChatSession } from "./ragStorage";
 import { showZoteroSource } from "./openSource";
@@ -311,7 +311,7 @@ export class RagSection {
             const nextTitle = inputEl.value.trim();
 
             if (apply && nextTitle && nextTitle !== oldTitle) {
-              await this.chatDB!.renameSession(s.id, nextTitle);
+              await this.chatDB!.renameSession(s.id, nextTitle, true);
             }
             await renderTabs();
           };
@@ -504,17 +504,43 @@ export class RagSection {
           return currentSessionId!;
         };
 
+        const maybeRefreshAutoTitle = async (sessionId: string) => {
+          try {
+            const session = await this.chatDB!.getSession(sessionId);
+            if (!session || session.isTitleUserSet) return;
+
+            const messages = await this.chatDB!.listMessages(sessionId);
+            const titleMessages: ChatTitleMessage[] = messages
+              .filter((m) => (m.content ?? "").trim().length > 0)
+              .map((m) => ({
+                role: m.role,
+                content: m.content,
+              }));
+            if (!titleMessages.length) return;
+
+            const suggestedTitle =
+              await this.ragClient.generateChatTitle(titleMessages);
+            if (!suggestedTitle) return;
+
+            const latestSession = await this.chatDB!.getSession(sessionId);
+            if (!latestSession || latestSession.isTitleUserSet) return;
+
+            await this.chatDB!.renameSession(sessionId, suggestedTitle, false);
+            await renderTabs();
+          } catch (e) {
+            const err =
+              e instanceof Error
+                ? e
+                : new Error(typeof e === "string" ? e : JSON.stringify(e));
+            Zotero.logError?.(err);
+          }
+        };
+
         const sendPrompt = async () => {
           const prompt = input.value.trim();
           if (!prompt) return;
 
           const sessionId = await ensureSession();
-
-          const session = await this.chatDB!.getSession(sessionId);
-          if (session && (session.title === "New chat" || !session.title)) {
-            const t = prompt.length > 32 ? `${prompt.slice(0, 32)}…` : prompt;
-            await this.chatDB!.renameSession(sessionId, t);
-          }
 
           input.value = "";
           sendBtn.disabled = true;
@@ -579,8 +605,8 @@ export class RagSection {
               sources,
             });
 
-            await renderTabs();
             await renderMessages();
+            void maybeRefreshAutoTitle(sessionId);
           } catch (e: any) {
             await this.chatDB!.updateMessage(pending.id, {
               content: getString("error-prefix", {

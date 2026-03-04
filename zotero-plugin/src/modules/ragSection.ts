@@ -192,6 +192,12 @@ export class RagSection {
               padding: 0 8px;
             }
 
+            #rag-nav-top {
+              display: flex;
+              justify-content: center;
+              margin-bottom: 6px;
+            }
+
             #rag-query-input,
             #rag-query-button,
             #rag-new-chat {
@@ -224,9 +230,16 @@ export class RagSection {
             }
           </html:style>
           <div id="rag-root">
+          <div id="rag-nav-top">
+            <html:button
+              id="rag-scroll-bottom"
+              title="Jump to latest message"
+            >⬇</html:button>
+          </div>
             <div id="rag-messages"></div>
         
             <div id="rag-input-row">
+            <html:button id="rag-scroll-top" title="First message">⬆</html:button>
               <html:input id="rag-query-input" type="text" data-l10n-id="rag-query-input-placeholder"/>
               <html:button id="rag-query-button" data-l10n-id="rag-query-button-label">Ask</html:button>
             </div>
@@ -261,7 +274,7 @@ export class RagSection {
           "#rag-query-button",
         ) as HTMLButtonElement;
 
-        if (!tabsEl || !newChatBtn || !messagesEl || !input || !sendBtn) return;
+        if (!tabsEl || !newChatBtn || !messagesEl || !input || !sendBtn || !scrollTopBtn || !scrollBottomBtn) return;
 
         let sessions: ChatSession[] = await this.chatDB.listSessions();
         let renamingSessionId: string | null = null;
@@ -470,7 +483,7 @@ export class RagSection {
           row.appendChild(bubble);
           messagesEl.appendChild(row);
         };
-
+        let autoScrollEnabled = true;
         const scrollToBottom = () => {
           const side = doc.getElementById(
             "zotero-view-item",
@@ -481,10 +494,30 @@ export class RagSection {
             win.requestAnimationFrame(() => {
               /* for some reason the scrollHeight will not reset when we remove chat elements.
                  so just updating it will recover from the illegal position */
-              side.scrollTop = side.scrollHeight + 100;
-            });
-          });
+             // side.scrollTop = side.scrollHeight + 100;
+          //  });
+        //};
+        messagesEl.addEventListener("wheel", () => {
+          autoScrollEnabled = false;
+        });
+        messagesEl.addEventListener("touchmove", () => {
+          autoScrollEnabled = false;
+        });
+        const scrollToFirstMessage = () => {
+          autoScrollEnabled = false;
+          const first = messagesEl.firstElementChild as HTMLElement | null;
+          if (!first) return;
+
+          first.scrollIntoView({ behavior: "smooth", block: "start" });
         };
+
+        const scrollToLastMessage = () => {
+          autoScrollEnabled = true;
+          const last = messagesEl.lastElementChild as HTMLElement | null;
+          if (!last) return;
+
+          last.scrollIntoView({ behavior: "smooth", block: "end" });
+        }
 
         const setMessageText = (msgId: string, value: string) => {
           const row = messagesEl.querySelector(
@@ -636,6 +669,9 @@ export class RagSection {
             void sendPrompt();
           }
         };
+
+        scrollTopBtn.onclick = scrollToFirstMessage;
+        scrollBottomBtn.onclick = scrollToLastMessage;
 
         await renderTabs();
         await renderMessages();

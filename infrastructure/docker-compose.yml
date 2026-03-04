@@ -34,11 +34,13 @@ services:
       - OLLAMA_HOST=not-set
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
+      - PROMPTS_DIR=/prompts
     ports:
       - "8000:8000"
       - "5678:5678"
     volumes:
       - documents:/data
+      - prompts:/prompts
 
   webdav:
     build: webdav/
@@ -55,3 +57,4 @@ services:
 volumes:
   documents:
   chroma:
+  prompts:

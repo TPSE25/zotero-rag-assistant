@@ -1,7 +1,21 @@
 import { getPref } from "../utils/prefs";
+import { normalizeApiBaseUrl } from "../utils/serverConfig";
 
 export interface QueryIn {
   prompt: string;
+}
+
+export interface ChatTitleMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatTitleIn {
+  messages: ChatTitleMessage[];
+}
+
+export interface ChatTitleOut {
+  title: string | null;
 }
 
 export interface Source {
@@ -11,10 +25,10 @@ export interface Source {
 }
 
 export type QueryStreamMsg =
-    | { type: "setSources"; sources: Source[] }
-    | { type: "updateProgress"; stage: string; debug?: string; }
-    | { type: "token"; token: string }
-    | { type: "done" }
+  | { type: "setSources"; sources: Source[] }
+  | { type: "updateProgress"; stage: string; debug?: string }
+  | { type: "token"; token: string }
+  | { type: "done" };
 
 export type RagHighlightRule = {
   id: string;
@@ -37,7 +51,7 @@ export type RagAnalyzePdfResponse = {
 
 export class RagClient {
   private get baseUrl(): string {
-    return getPref("apiBaseUrl") || "http://localhost:8080";
+    return normalizeApiBaseUrl(getPref("apiBaseUrl"));
   }
 
   public async *query(prompt: string): AsyncGenerator<QueryStreamMsg> {
@@ -63,6 +77,7 @@ export class RagClient {
 
     let buf = "";
     while (true) {
+      // @ts-expect-error zotero/gecko types: getReader() ends up as BYOB
       const { value, done } = await reader.read();
       if (done) break;
 
@@ -82,7 +97,10 @@ export class RagClient {
     if (tail) yield JSON.parse(tail) as QueryStreamMsg;
   }
 
-  public async analyzePdf(pdf: string, cfg: RagConfig): Promise<RagAnalyzePdfResponse> {
+  public async analyzePdf(
+    pdf: string,
+    cfg: RagConfig,
+  ): Promise<RagAnalyzePdfResponse> {
     const win = Zotero.getMainWindow();
     const url = `${this.baseUrl}/api/annotations`;
 
@@ -91,7 +109,11 @@ export class RagClient {
     for (let i = 0; i < pdf.length; i++) {
       u8[i] = pdf.charCodeAt(i) & 0xff;
     }
-    fd.append("file", new win.Blob([u8], { type: "application/pdf" }), "document.pdf");
+    fd.append(
+      "file",
+      new win.Blob([u8], { type: "application/pdf" }),
+      "document.pdf",
+    );
     fd.append("config", JSON.stringify(cfg));
 
     const res = await fetch(url, {
@@ -101,8 +123,31 @@ export class RagClient {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`RAG analyzePdf failed: HTTP ${res.status} ${res.statusText} ${body}`);
+      throw new Error(
+        `RAG analyzePdf failed: HTTP ${res.status} ${res.statusText} ${body}`,
+      );
     }
-    return (await res.json()) as RagAnalyzePdfResponse;
+    return (await res.json()) as unknown as RagAnalyzePdfResponse;
+  }
+
+  public async generateChatTitle(
+    messages: ChatTitleMessage[],
+  ): Promise<string | null> {
+    const url = `${this.baseUrl}/api/chat-title`;
+    const body: ChatTitleIn = { messages };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      throw new Error(`RAG title API error (${res.status}): ${errorText}`);
+    }
+
+    const out = (await res.json()) as unknown as ChatTitleOut;
+    const title = (out?.title ?? "").trim();
+    return title || null;
   }
 }

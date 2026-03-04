@@ -1,8 +1,13 @@
 import { RagSection } from "./modules/ragSection";
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
-import {registerReaderToolbarButton, unregisterReaderToolbarButton} from "./modules/readerToolbar";
-import {pickOutputDir} from "./utils/picker";
+import {
+  registerReaderToolbarButton,
+  unregisterReaderToolbarButton,
+} from "./modules/readerToolbar";
+import { pickOutputDir } from "./utils/picker";
+import { checkWebDAVOnStart } from "./utils/prefs";
+import { initPromptSettings } from "./modules/promptSettings";
 
 async function onStartup() {
   await Promise.all([
@@ -26,6 +31,7 @@ async function onStartup() {
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
   addon.data.initialized = true;
+  checkWebDAVOnStart();
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
@@ -45,11 +51,12 @@ async function onPrefsEvent(type: string, { window }: { window: Window }) {
   if (type !== "load") return;
   const btn = window.document.getElementById("chatOutputDirBtn");
   btn?.addEventListener("click", async () => await pickOutputDir(window));
+  await initPromptSettings(window);
 }
 
 function onShutdown(): void {
   ztoolkit.unregisterAll();
-  unregisterReaderToolbarButton()
+  unregisterReaderToolbarButton();
   addon.data.dialog?.window?.close();
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
@@ -61,5 +68,5 @@ export default {
   onShutdown,
   onMainWindowLoad,
   onMainWindowUnload,
-  onPrefsEvent
+  onPrefsEvent,
 };

@@ -1,0 +1,46 @@
+{
+  "pdf_path": "Project_3_Offloading.pdf",
+  "rules": [
+    {
+      "id": "links",
+      "termsRaw": "highlight links and URLs in the document",
+      "expected": [
+        "https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html",
+        "https://tg.dm.informatik.tu-darmstadt.de/fomo_ws2025"
+      ]
+    },
+    {
+      "id": "abbrev",
+      "termsRaw": "highlight abbreviations and acronyms",
+      "expected": [
+        "GPUs",
+        "CI",
+        "AVX512",
+        "TBB",
+        "VM",
+        "SIMD",
+        "TA"
+      ]
+    },
+    {
+      "id": "test_related",
+      "termsRaw": "highlight test related requirements, setup, and runtime evaluation details",
+      "expected": [
+        "automated CI runner with 20 advanced tests",
+        "runtime tests with pre-defined seeds",
+        "basic tests are intended to test your implementation's functional correctness",
+        "passing tests on the devvm is a good indicator"
+      ]
+    },
+    {
+      "id": "submission_workflow",
+      "termsRaw": "highlight submission workflow and repository process requirements",
+      "expected": [
+        "filled the form given in Moodle",
+        "added to a gitlab group with a template project",
+        "Fork the repository and modify the code in src/ to pass the tests in test/",
+        "Push to remote only when you are comfortable with getting tested by the CI runner"
+      ]
+    }
+  ]
+}

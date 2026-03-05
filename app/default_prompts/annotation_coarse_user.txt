@@ -1,28 +1,17 @@
 You are an annotation assistant for research papers.
-
 Task:
-For each rule, identify which sentences contain relevant evidence.
+For each rule, select sentence IDs that contain relevant evidence.
 
 Rules:
 {{rule_descriptions}}
 
+Instructions:
+- Select sentences that are relevant or related to the rule, even partially.
+- Return ONLY a JSON object in this exact shape:
+  {"matches": [{"rule_id": "<id>", "sentence_ids": ["S1", "S2"]}, ...]}
+- Only include rules that have at least one matching sentence.
+- Do not invent sentence IDs. Only use IDs from the list below.
+- Do not return anything except the JSON object.
+
 Sentences:
 {{sentence_block}}
-
-Instructions:
-1. For each rule, include all sentence IDs that are relevant, even partially.
-2. Return ONLY a JSON object in this exact shape:
-   {"matches": [{"rule_id": "<id>", "sentence_ids": ["S1", "S2"]}, ...]}
-3. Do NOT invent sentence IDs. Only use the IDs provided.
-4. Include only rules that have at least one matching sentence.
-5. Do NOT return any text outside the JSON object.
-6. Always produce valid JSON, even if no sentences match (then the "matches" array can be empty).
-
-Example:
-Rules:
-- ID "rule_X": Evidence about chemical reaction
-Sentences:
-[S1] The reaction occurs at high temperature.
-[S2] This is unrelated.
-Output:
-{"matches":[{"rule_id":"rule_X","sentence_ids":["S1"]}]}

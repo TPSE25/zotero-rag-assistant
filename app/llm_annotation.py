@@ -187,40 +187,23 @@ async def _llm_find_relevant_sentences(chunk, rules, model, client, debug):
     return data.matches
 
 async def _llm_refine_span_boundaries(rule, tokens, model, client, chunk_idx, debug):
-    """
-    Ask the LLM for token-level span boundaries for a rule and a token slice.
-    Returns a list of LLMBoundarySpan objects.
-    """
     token_lines = "\n".join(f"[{i}] {t.text}" for i, t in enumerate(tokens))
     prompt = render_prompt("annotation_boundary_user", {
-        "rule_id": rule.id,
-        "rule_terms": rule.termsRaw,
-        "plain_text": " ".join(t.text for t in tokens),
-        "token_lines": token_lines
+        "rule_id": rule.id, "rule_terms": rule.termsRaw, 
+        "plain_text": " ".join(t.text for t in tokens), "token_lines": token_lines
     })
 
-    response = await client.chat(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        format=LLMBoundaryResponse.model_json_schema(),
-        options={"temperature": 0.0}
-    )
-
+    response = await client.chat(model=model, messages=[{"role": "user", "content": prompt}], 
+                                 format=LLMBoundaryResponse.model_json_schema(), options={"temperature": 0.0})
+    
     raw = response["message"]["content"]
     if debug is not None:
         debug.append({"stage": "refine", "rule_id": rule.id, "response": raw})
+        
+    data = LLMBoundaryResponse.model_validate(_parse_json(raw))
+    return data.spans
 
-    parsed = _parse_json(raw)
-    spans = []
-    for s in parsed.get("spans", []):
-        # Validate indices
-        if isinstance(s, dict) and "start_token" in s and "end_token" in s:
-            start, end = s["start_token"], s["end_token"]
-            if 0 <= start <= end < len(tokens):
-                spans.append(LLMBoundarySpan(start_token=start, end_token=end))
-            else:
-                logger.warning(f"Discarded invalid span {s} for rule {rule.id} in chunk {chunk_idx}")
-    return spans
+# --- Utilities ---
 
 def _create_chunks(tokens, chunk_size, overlap):
     chunks = []
@@ -252,24 +235,9 @@ def _group_contiguous_sentence_ids(ids, pos):
     groups.append(cur)
     return groups
 
-def _parse_json(raw: str) -> dict:
-    """
-    Safely parse JSON from LLM output, even if there are multiple objects or trailing text.
-    Returns a dict with 'matches' and 'spans'.
-    """
-    matches, spans = [], []
-    
-    # Find all JSON-looking objects
-    for m in re.finditer(r"\{.*?\}", raw, flags=re.DOTALL):
-        try:
-            obj = json.loads(m.group(0))
-            # Merge coarse matches
-            if "matches" in obj and isinstance(obj["matches"], list):
-                matches.extend(obj["matches"])
-            # Merge refine spans
-            if "spans" in obj and isinstance(obj["spans"], list):
-                spans.extend(obj["spans"])
-        except json.JSONDecodeError:
-            continue
-    
-    return {"matches": matches, "spans": spans}
+def _parse_json(raw):
+    try: return json.loads(raw)
+    except:
+        match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+        if match: return json.loads(match.group(0))
+    return {"matches": [], "spans": []} # Fallback for empty/bad JSON

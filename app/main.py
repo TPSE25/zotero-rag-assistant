@@ -419,6 +419,7 @@ class RagPdfMatch(BaseModel):
     id: str
     pageIndex: int = Field(ge=0)
     rects: List[List[float]]
+    text: str | None = None
 
 
 
@@ -481,6 +482,7 @@ async def annotations(
                 id=m["id"],
                 pageIndex=m["page"],
                 rects=_normalize_rects(cast(list[tuple[float, float, float, float] | None], m["rects"])),
+                text=cast(str | None, m.get("text")),
             )
             for m in matches_data
         ]

@@ -125,10 +125,16 @@ async def process_annotations(
                     by_page.setdefault(tok.page, []).append(tok.rect)
 
             for page_idx, rects in by_page.items():
+                page_tokens = [
+                    chunk.tokens[idx].text
+                    for idx in range(hit.start_token, hit.end_token + 1)
+                    if chunk.tokens[idx].page == page_idx
+                ]
                 final_matches.append({
                     "id": hit.rule_id,
                     "page": page_idx,
-                    "rects": rects
+                    "rects": rects,
+                    "text": " ".join(page_tokens).strip()
                 })
 
     return final_matches

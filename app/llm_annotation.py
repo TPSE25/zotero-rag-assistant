@@ -75,6 +75,7 @@ async def process_annotations(
     rules: Sequence[RuleLike],
     answer_model: str,
     ollama_client: AsyncClient,
+    chunk_size: Optional[int] = None,
     debug_events: Optional[List[dict[str, Any]]] = None,
 ) -> List[dict[str, Any]]:
 
@@ -96,7 +97,8 @@ async def process_annotations(
     if not all_tokens:
         return []
 
-    chunks = _create_chunks(all_tokens, chunk_size=1600, overlap=150)
+    resolved_chunk_size = chunk_size or 1600
+    chunks = _create_chunks(all_tokens, chunk_size=resolved_chunk_size, overlap=150)
 
     tasks = [
         _process_chunk(chunk, rules, answer_model, ollama_client, debug_events)

@@ -440,6 +440,7 @@ class RagHighlightRule(BaseModel):
 
 class RagPopupConfig(BaseModel):
     rules: list[RagHighlightRule]
+    chunkLength: int | None = Field(default=None, ge=32, le=20000)
 
 def _normalize_rects(rects: list[tuple[float, float, float, float] | None]) -> List[List[float]]:
     out: List[List[float]] = []
@@ -474,6 +475,7 @@ async def annotations(
             rules=cfg.rules,
             answer_model=ANSWER_MODEL,
             ollama_client=ollama_client,
+            chunk_size=cfg.chunkLength,
             debug_events=llm_debug
         )
 

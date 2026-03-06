@@ -124,7 +124,19 @@ async def process_annotations(
     async def _run_chunk(chunk: Chunk) -> tuple[Chunk, List[ExactSpanMatch]]:
         return chunk, await _process_chunk(chunk, rules, answer_model, ollama_client, debug_events)
 
-    tasks = [asyncio.create_task(_run_chunk(chunk)) for chunk in chunks]
+    tasks: List[asyncio.Task[tuple[Chunk, List[ExactSpanMatch]]]] = []
+    dispatched_chunks = 0
+    for chunk in chunks:
+        tasks.append(asyncio.create_task(_run_chunk(chunk)))
+        dispatched_chunks += 1
+        if progress_callback is not None:
+            await progress_callback(
+                {
+                    "stage": "chunk_dispatched",
+                    "dispatched_chunks": dispatched_chunks,
+                    "total_chunks": len(chunks),
+                }
+            )
 
     completed_chunks = 0
     for task in asyncio.as_completed(tasks):

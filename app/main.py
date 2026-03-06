@@ -171,6 +171,7 @@ class UpdateProgressEvent(BaseModel):
     type: Literal["updateProgress"] = "updateProgress"
     stage: str
     debug: Optional[str] = None
+    sent: Optional[int] = None
     completed: Optional[int] = None
     total: Optional[int] = None
 
@@ -585,6 +586,7 @@ async def annotations(
             yield_event = UpdateProgressEvent(
                 stage=cast(str, payload.get("stage", "annotation_progress")),
                 debug=cast(Optional[str], payload.get("debug")),
+                sent=cast(Optional[int], payload.get("dispatched_chunks")),
                 completed=cast(Optional[int], payload.get("completed_chunks")),
                 total=cast(Optional[int], payload.get("total_chunks")),
             )

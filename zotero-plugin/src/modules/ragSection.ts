@@ -1,7 +1,8 @@
-import { RagClient } from "./ragClient";
+import { ChatTitleMessage, RagClient } from "./ragClient";
 import { getString } from "../utils/locale";
 import { ChatDB, ChatMessage, ChatSession } from "./ragStorage";
 import { showZoteroSource } from "./openSource";
+import { assert } from "../utils/assert";
 
 export class RagSection {
   private static ragClient = new RagClient();
@@ -199,7 +200,9 @@ export class RagSection {
 
             #rag-query-input,
             #rag-query-button,
-            #rag-new-chat {
+            #rag-new-chat,
+            #rag-scroll-top,
+            #rag-scroll-bottom {
               box-sizing: border-box;
               height: 28px;
               padding: 0 10px;
@@ -212,29 +215,41 @@ export class RagSection {
               justify-content: center;
               padding: 0 12px;
             }
-            
+
             #rag-scroll-top,
             #rag-scroll-bottom {
               flex: 0 0 auto;
               width: 28px;
               padding: 0;
               font-size: 14px;
-              position: relative;
-              top: -2px;
             }
-
+            
+            .rag-tab-title-edit {
+              font: inherit;
+              color: inherit;
+              background: Canvas;
+              box-sizing: border-box;
+            
+              max-width: 130px;
+              width: 130px;
+              padding: 0 6px;
+            
+              border: 1px solid GrayText;
+              border-radius: 6px;
+              height: 20px;
+            }
           </html:style>
           <div id="rag-root">
-          <div id="rag-nav-top">
-            <html:button
-              id="rag-scroll-bottom"
-              title="Jump to latest message"
-            >⬇</html:button>
-          </div>
+            <div id="rag-nav-top">
+              <html:button
+                id="rag-scroll-bottom"
+                title="Jump to latest message"
+              >⬇</html:button>
+            </div>
             <div id="rag-messages"></div>
         
             <div id="rag-input-row">
-            <html:button id="rag-scroll-top" title="First message">⬆</html:button>
+              <html:button id="rag-scroll-top" title="First message">⬆</html:button>
               <html:input id="rag-query-input" type="text" data-l10n-id="rag-query-input-placeholder"/>
               <html:button id="rag-query-button" data-l10n-id="rag-query-button-label">Ask</html:button>
             </div>
@@ -246,36 +261,123 @@ export class RagSection {
           </div>
       `,
       onRender: async ({ body /*, item*/ }) => {
+        const doc = body.ownerDocument;
         const win = body.ownerDocument?.defaultView as Window | null;
-        if (!win) return;
+        if (!doc || !win) return;
 
-        const idbFactory = (win.indexedDB ?? win.mozIndexedDB) as IDBFactory | undefined;
+        const idbFactory = (win.indexedDB ?? win.mozIndexedDB) as
+          | IDBFactory
+          | undefined;
         if (!idbFactory) return;
 
         if (!this.chatDB) this.chatDB = new ChatDB(idbFactory);
 
         const tabsEl = body.querySelector("#rag-tabs") as HTMLElement;
-        const newChatBtn = body.querySelector("#rag-new-chat") as HTMLButtonElement;
+        const newChatBtn = body.querySelector(
+          "#rag-new-chat",
+        ) as HTMLButtonElement;
         const messagesEl = body.querySelector("#rag-messages") as HTMLElement;
-        const input = body.querySelector("#rag-query-input") as HTMLInputElement;
-        const sendBtn = body.querySelector("#rag-query-button") as HTMLButtonElement;
-        const scrollTopBtn = body.querySelector("#rag-scroll-top") as HTMLButtonElement;
-        const scrollBottomBtn = body.querySelector("#rag-scroll-bottom") as HTMLButtonElement;
+        const input = body.querySelector(
+          "#rag-query-input",
+        ) as HTMLInputElement;
+        const sendBtn = body.querySelector(
+          "#rag-query-button",
+        ) as HTMLButtonElement;
+        const scrollTopBtn = body.querySelector(
+          "#rag-scroll-top",
+        ) as HTMLButtonElement;
+        const scrollBottomBtn = body.querySelector(
+          "#rag-scroll-bottom",
+        ) as HTMLButtonElement;
 
-        if (!tabsEl || !newChatBtn || !messagesEl || !input || !sendBtn || !scrollTopBtn || !scrollBottomBtn) return;
+        if (
+          !tabsEl ||
+          !newChatBtn ||
+          !messagesEl ||
+          !input ||
+          !sendBtn ||
+          !scrollTopBtn ||
+          !scrollBottomBtn
+        )
+          return;
 
         let sessions: ChatSession[] = await this.chatDB.listSessions();
+        let renamingSessionId: string | null = null;
         let currentSessionId: string | null = sessions[0]?.id ?? null;
 
         if (!currentSessionId) {
-          const session = await this.chatDB.createSession(getString("rag-chat-new-title"));
+          const session = await this.chatDB.createSession(
+            getString("chat-new-title"),
+          );
           sessions = [session];
           currentSessionId = session.id;
         }
 
+        const beginRenameSession = async (s: ChatSession, tab: HTMLElement) => {
+          if (renamingSessionId) return;
+          renamingSessionId = s.id;
+          tab.dataset.editing = "1";
+
+          const titleEl = tab.querySelector(
+            ".rag-tab-title",
+          ) as HTMLElement | null;
+          if (!titleEl) {
+            renamingSessionId = null;
+            tab.dataset.editing = "0";
+            return;
+          }
+
+          const oldTitle = (s.title ?? "").trim();
+
+          const inputEl = ztoolkit.UI.createElement(
+            body.ownerDocument!,
+            "input",
+          ) as HTMLInputElement;
+          inputEl.classList.add("rag-tab-title-edit");
+          inputEl.value = oldTitle;
+          inputEl.placeholder = "Chat";
+
+          inputEl.onclick = (e) => e.stopPropagation();
+          inputEl.onmousedown = (e) => e.stopPropagation();
+
+          const finish = async (apply: boolean) => {
+            if (tab.dataset.editing !== "1") return;
+
+            tab.dataset.editing = "0";
+            renamingSessionId = null;
+
+            const nextTitle = inputEl.value.trim();
+
+            if (apply && nextTitle && nextTitle !== oldTitle) {
+              await this.chatDB!.renameSession(s.id, nextTitle, true);
+            }
+            await renderTabs();
+          };
+
+          inputEl.onkeydown = (e) => {
+            assert(e instanceof KeyboardEvent);
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void finish(true);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              void finish(false);
+            }
+          };
+
+          inputEl.onblur = () => void finish(true);
+
+          tab.replaceChild(inputEl, titleEl);
+
+          inputEl.focus();
+          inputEl.select();
+        };
+
         const renderTabs = async () => {
-          sessions = await this.chatDB.listSessions();
-          if (!currentSessionId && sessions.length) currentSessionId = sessions[0].id;
+          sessions = await this.chatDB!.listSessions();
+          if (!currentSessionId && sessions.length)
+            currentSessionId = sessions[0].id;
 
           tabsEl.innerHTML = "";
           sessions.forEach((s) => {
@@ -283,12 +385,22 @@ export class RagSection {
             tab.classList.add("rag-tab");
             if (s.id === currentSessionId) tab.classList.add("is-active");
 
-            const title = ztoolkit.UI.createElement(body.ownerDocument!, "span");
+            const title = ztoolkit.UI.createElement(
+              body.ownerDocument!,
+              "span",
+            );
             title.classList.add("rag-tab-title");
             title.textContent = s.title || "Chat";
+            title.ondblclick = (ev) => {
+              ev.stopPropagation();
+              void beginRenameSession(s, tab);
+            };
             tab.title = s.title || "Chat";
 
-            const close = ztoolkit.UI.createElement(body.ownerDocument!, "span");
+            const close = ztoolkit.UI.createElement(
+              body.ownerDocument!,
+              "span",
+            );
             close.classList.add("rag-tab-close");
             close.textContent = "×";
             close.title = "Close";
@@ -307,7 +419,9 @@ export class RagSection {
               await renderMessages();
             };
 
-            tab.onclick = async () => {
+            tab.onclick = async (event) => {
+              if ((event as MouseEvent).detail > 1) return;
+              if (tab.dataset.editing === "1") return;
               currentSessionId = s.id;
               await renderTabs();
               await renderMessages();
@@ -346,10 +460,16 @@ export class RagSection {
           bubble.appendChild(text);
 
           if (m.role === "assistant" && m.sources && m.sources.length) {
-            const sourcesWrap = ztoolkit.UI.createElement(body.ownerDocument!, "div");
+            const sourcesWrap = ztoolkit.UI.createElement(
+              body.ownerDocument!,
+              "div",
+            );
             sourcesWrap.classList.add("rag-sources");
 
-            const header = ztoolkit.UI.createElement(body.ownerDocument!, "div");
+            const header = ztoolkit.UI.createElement(
+              body.ownerDocument!,
+              "div",
+            );
             header.classList.add("rag-sources-header");
             header.textContent = getString("sources-header");
 
@@ -357,7 +477,10 @@ export class RagSection {
             list.classList.add("rag-sources-list");
 
             for (const source of m.sources) {
-              const line = ztoolkit.UI.createElement(body.ownerDocument!, "div");
+              const line = ztoolkit.UI.createElement(
+                body.ownerDocument!,
+                "div",
+              );
               line.classList.add("rag-sources-line");
               line.onclick = async () => {
                 try {
@@ -385,48 +508,63 @@ export class RagSection {
           row.appendChild(bubble);
           messagesEl.appendChild(row);
         };
+
         let autoScrollEnabled = true;
+
         const scrollToBottom = () => {
           if (!autoScrollEnabled) return;
-          win.requestAnimationFrame(() => {
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-          });
-        };
-        /*  const side = body.ownerDocument.getElementById("zotero-view-item") as HTMLElement | null;
+          const side = doc.getElementById(
+            "zotero-view-item",
+          ) as HTMLElement | null;
           if (!side) throw new Error("No #zotero-view-item found");
 
           win.requestAnimationFrame(() => {
             win.requestAnimationFrame(() => {
               /* for some reason the scrollHeight will not reset when we remove chat elements.
                  so just updating it will recover from the illegal position */
-             // side.scrollTop = side.scrollHeight + 100;
-          //  });
-        //};
+              side.scrollTop = side.scrollHeight + 100;
+            });
+          });
+        };
+
         messagesEl.addEventListener("wheel", () => {
           autoScrollEnabled = false;
         });
         messagesEl.addEventListener("touchmove", () => {
           autoScrollEnabled = false;
         });
+
         const scrollToFirstMessage = () => {
           autoScrollEnabled = false;
-          const first = messagesEl.firstElementChild as HTMLElement | null;
-          if (!first) return;
 
-          first.scrollIntoView({ behavior: "smooth", block: "start" });
+          const side = doc.getElementById("zotero-view-item") as HTMLElement | null;
+          if (!side) throw new Error("No #zotero-view-item found");
+
+          const navTop = body.querySelector("#rag-nav-top") as HTMLElement | null;
+          if (!navTop) return;
+
+          // Position of navTop relative to the scroll container
+          const sideRect = side.getBoundingClientRect();
+          const navRect = navTop.getBoundingClientRect();
+
+          // Current scrollTop + delta between nav and container top
+          const targetTop = side.scrollTop + (navRect.top - sideRect.top);
+
+          side.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
         };
 
         const scrollToLastMessage = () => {
           autoScrollEnabled = true;
-          const last = messagesEl.lastElementChild as HTMLElement | null;
-          if (!last) return;
-
-          last.scrollIntoView({ behavior: "smooth", block: "end" });
-        }
+          scrollToBottom();
+        };
 
         const setMessageText = (msgId: string, value: string) => {
-          const row = messagesEl.querySelector(`[data-msg-id="${msgId}"]`) as HTMLElement | null;
-          const textEl = row?.querySelector(".rag-bubble-text") as HTMLElement | null;
+          const row = messagesEl.querySelector(
+            `[data-msg-id="${msgId}"]`,
+          ) as HTMLElement | null;
+          const textEl = row?.querySelector(
+            ".rag-bubble-text",
+          ) as HTMLElement | null;
           if (textEl) textEl.textContent = value;
         };
 
@@ -438,17 +576,43 @@ export class RagSection {
           return currentSessionId!;
         };
 
+        const maybeRefreshAutoTitle = async (sessionId: string) => {
+          try {
+            const session = await this.chatDB!.getSession(sessionId);
+            if (!session || session.isTitleUserSet) return;
+
+            const messages = await this.chatDB!.listMessages(sessionId);
+            const titleMessages: ChatTitleMessage[] = messages
+              .filter((m) => (m.content ?? "").trim().length > 0)
+              .map((m) => ({
+                role: m.role,
+                content: m.content,
+              }));
+            if (!titleMessages.length) return;
+
+            const suggestedTitle =
+              await this.ragClient.generateChatTitle(titleMessages);
+            if (!suggestedTitle) return;
+
+            const latestSession = await this.chatDB!.getSession(sessionId);
+            if (!latestSession || latestSession.isTitleUserSet) return;
+
+            await this.chatDB!.renameSession(sessionId, suggestedTitle, false);
+            await renderTabs();
+          } catch (e) {
+            const err =
+              e instanceof Error
+                ? e
+                : new Error(typeof e === "string" ? e : JSON.stringify(e));
+            Zotero.logError?.(err);
+          }
+        };
+
         const sendPrompt = async () => {
           const prompt = input.value.trim();
           if (!prompt) return;
 
           const sessionId = await ensureSession();
-
-          const session = await this.chatDB!.getSession(sessionId);
-          if (session && (session.title === "New chat" || !session.title)) {
-            const t = prompt.length > 32 ? `${prompt.slice(0, 32)}…` : prompt;
-            await this.chatDB!.renameSession(sessionId, t);
-          }
 
           input.value = "";
           sendBtn.disabled = true;
@@ -479,10 +643,13 @@ export class RagSection {
             for await (const msg of this.ragClient.query(prompt)) {
               if (msg.type === "updateProgress") {
                 if (!sawFirstToken) {
-                  setMessageText(pending.id, `${getString("querying-message")} (${msg.stage})`);
+                  setMessageText(
+                    pending.id,
+                    `${getString("querying-message")} (${msg.stage})`,
+                  );
                 }
                 if (msg.debug !== undefined) {
-                  Zotero.debug("[RAG] " + msg.debug)
+                  Zotero.debug("[RAG] " + msg.debug);
                 }
               }
 
@@ -510,12 +677,13 @@ export class RagSection {
               sources,
             });
 
-            await renderTabs();
             await renderMessages();
-
+            void maybeRefreshAutoTitle(sessionId);
           } catch (e: any) {
             await this.chatDB!.updateMessage(pending.id, {
-              content: getString("error-prefix", { args: { message: e?.message ?? String(e) } })
+              content: getString("error-prefix", {
+                args: { message: e?.message ?? String(e) },
+              }),
             });
             await renderMessages();
           } finally {
@@ -534,6 +702,7 @@ export class RagSection {
 
         sendBtn.onclick = sendPrompt;
         input.onkeydown = (e) => {
+          assert(e instanceof KeyboardEvent);
           if (e.key === "Enter") {
             e.preventDefault();
             void sendPrompt();

@@ -12,7 +12,7 @@ from chromadb.api.types import SparseVector, QueryResult, GetResult
 from fastapi.responses import StreamingResponse
 
 from chromadb.api.models.Collection import Collection
-from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends, Request
+from fastapi import FastAPI, HTTPException, UploadFile, Form, File, Depends
 from pydantic import BaseModel, Field
 from ollama import AsyncClient
 import chromadb
@@ -189,8 +189,19 @@ class AnnotationMatchesEvent(BaseModel):
     type: Literal["annotationMatches"] = "annotationMatches"
     matches: List[Dict[str, Any]]
 
+class ErrorEvent(BaseModel):
+    type: Literal["error"] = "error"
+    message: str
+
 NDJSONEvent = Annotated[
-    Union[UpdateProgressEvent, SetSourcesEvent, TokenEvent, AnnotationMatchesEvent, DoneEvent],
+    Union[
+        UpdateProgressEvent,
+        SetSourcesEvent,
+        TokenEvent,
+        AnnotationMatchesEvent,
+        DoneEvent,
+        ErrorEvent,
+    ],
     Field(discriminator="type"),
 ]
 
@@ -498,28 +509,12 @@ AnnotationMatchesCb = Callable[[List[Dict[str, Any]]], Awaitable[None]]
 
 @app.post("/api/annotations", response_model=None)
 async def annotations(
-    request: Request,
     file: UploadFile = File(...),
     config: str = Form(...),
     ollama_client: AsyncClient = Depends(_create_ollama_client)
-) -> AnnotationsResponse | StreamingResponse:
+) -> StreamingResponse:
     cfg = RagPopupConfig.model_validate_json(config)
     page_range = _parse_page_range(cfg.pageRange)
-    wants_stream = "application/x-ndjson" in request.headers.get("accept", "")
-    if not cfg.rules:
-        if wants_stream:
-            async def empty_gen() -> AsyncIterator[str]:
-                yield _ndjson(UpdateProgressEvent(stage="done", completed=0, total=0))
-                yield _ndjson(DoneEvent())
-            return StreamingResponse(
-                empty_gen(),
-                media_type="application/x-ndjson",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-        return AnnotationsResponse(matches=[], llmDebug=[])
 
     def _to_rag_match(m: Dict[str, Any]) -> RagPdfMatch:
         return RagPdfMatch(
@@ -530,9 +525,9 @@ async def annotations(
         )
 
     async def _compute(
-        progress_cb: Optional[AnnotationProgressCb] = None,
-        matches_cb: Optional[AnnotationMatchesCb] = None,
-    ) -> tuple[List[RagPdfMatch], List[Dict[str, Any]]]:
+        progress_cb: AnnotationProgressCb,
+        matches_cb: AnnotationMatchesCb,
+    ) -> None:
         tmp_path: str | None = None
         llm_debug: List[Dict[str, Any]] = []
         try:
@@ -541,16 +536,7 @@ async def annotations(
                     tmp.write(content)
                 tmp_path = tmp.name
 
-            if progress_cb is not None:
-                await progress_cb({"stage": "file_uploaded"})
-
-            async def _on_progress(payload: Dict[str, Any]) -> None:
-                if progress_cb is not None:
-                    await progress_cb(payload)
-
-            async def _on_matches(partial: List[Dict[str, Any]]) -> None:
-                if matches_cb is not None and partial:
-                    await matches_cb(partial)
+            await progress_cb({"stage": "file_uploaded"})
 
             matches_data = await process_annotations_llm(
                 pdf_path=tmp_path,
@@ -560,67 +546,58 @@ async def annotations(
                 chunk_size=cfg.chunkLength,
                 debug_events=llm_debug,
                 page_range=page_range,
-                progress_callback=_on_progress if progress_cb is not None else None,
-                chunk_matches_callback=_on_matches if matches_cb is not None else None,
+                progress_callback=progress_cb,
+                chunk_matches_callback=matches_cb,
             )
-
-            matches = [_to_rag_match(m) for m in matches_data]
-            return matches, llm_debug
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    if wants_stream:
-        async def gen() -> AsyncIterator[str]:
-            queue: asyncio.Queue[str | None] = asyncio.Queue()
+    async def gen() -> AsyncIterator[str]:
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-            async def progress_cb(payload: Dict[str, Any]) -> None:
-                yield_event = UpdateProgressEvent(
-                    stage=cast(str, payload.get("stage", "annotation_progress")),
-                    debug=cast(Optional[str], payload.get("debug")),
-                    completed=cast(Optional[int], payload.get("completed_chunks")),
-                    total=cast(Optional[int], payload.get("total_chunks")),
-                )
-                await queue.put(_ndjson(yield_event))
+        async def progress_cb(payload: Dict[str, Any]) -> None:
+            yield_event = UpdateProgressEvent(
+                stage=cast(str, payload.get("stage", "annotation_progress")),
+                debug=cast(Optional[str], payload.get("debug")),
+                completed=cast(Optional[int], payload.get("completed_chunks")),
+                total=cast(Optional[int], payload.get("total_chunks")),
+            )
+            await queue.put(_ndjson(yield_event))
 
-            async def matches_cb(partial: List[Dict[str, Any]]) -> None:
-                event = AnnotationMatchesEvent(matches=[_to_rag_match(m).model_dump() for m in partial])
-                await queue.put(_ndjson(event))
+        async def matches_cb(partial: List[Dict[str, Any]]) -> None:
+            event = AnnotationMatchesEvent(matches=[_to_rag_match(m).model_dump() for m in partial])
+            await queue.put(_ndjson(event))
 
-            async def worker() -> None:
-                try:
-                    await _compute(progress_cb=progress_cb, matches_cb=matches_cb)
-                except Exception as e:
-                    logging.error(f"Error in annotations stream: {e}")
-                    await queue.put(_ndjson(UpdateProgressEvent(stage="error", debug=str(e))))
-                finally:
-                    await queue.put(_ndjson(DoneEvent()))
-                    await queue.put(None)
-
-            task = asyncio.create_task(worker())
+        async def worker() -> None:
             try:
-                while True:
-                    item = await queue.get()
-                    if item is None:
-                        break
-                    yield item
+                if not cfg.rules:
+                    await queue.put(_ndjson(UpdateProgressEvent(stage="done", completed=0, total=0)))
+                else:
+                    await _compute(progress_cb=progress_cb, matches_cb=matches_cb)
+            except Exception as e:
+                logging.error(f"Error in annotations stream: {e}")
+                await queue.put(_ndjson(ErrorEvent(message=str(e))))
             finally:
-                if not task.done():
-                    task.cancel()
+                await queue.put(_ndjson(DoneEvent()))
+                await queue.put(None)
 
-        return StreamingResponse(
-            gen(),
-            media_type="application/x-ndjson",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
-        )
+        task = asyncio.create_task(worker())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
 
-    llm_debug: List[Dict[str, Any]] = []
-    try:
-        matches, llm_debug = await _compute()
-        return AnnotationsResponse(matches=matches, llmDebug=llm_debug)
-    except Exception as e:
-        logging.error(f"Error in annotations: {e}")
-        return AnnotationsResponse(matches=[], llmDebug=llm_debug)
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

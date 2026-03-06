@@ -525,33 +525,58 @@ async def annotations(
         )
 
     async def _compute(
+        pdf_path: str,
         progress_cb: AnnotationProgressCb,
         matches_cb: AnnotationMatchesCb,
     ) -> None:
-        tmp_path: str | None = None
         llm_debug: List[Dict[str, Any]] = []
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                while content := await file.read(1024 * 1024):
-                    tmp.write(content)
-                tmp_path = tmp.name
+        await progress_cb({"stage": "file_uploaded"})
+        await process_annotations_llm(
+            pdf_path=pdf_path,
+            rules=cfg.rules,
+            answer_model=ANSWER_MODEL,
+            ollama_client=ollama_client,
+            chunk_size=cfg.chunkLength,
+            debug_events=llm_debug,
+            page_range=page_range,
+            progress_callback=progress_cb,
+            chunk_matches_callback=matches_cb,
+        )
 
-            await progress_cb({"stage": "file_uploaded"})
+    if not cfg.rules:
+        async def empty_gen() -> AsyncIterator[str]:
+            yield _ndjson(UpdateProgressEvent(stage="done", completed=0, total=0))
+            yield _ndjson(DoneEvent())
 
-            matches_data = await process_annotations_llm(
-                pdf_path=tmp_path,
-                rules=cfg.rules,
-                answer_model=ANSWER_MODEL,
-                ollama_client=ollama_client,
-                chunk_size=cfg.chunkLength,
-                debug_events=llm_debug,
-                page_range=page_range,
-                progress_callback=progress_cb,
-                chunk_matches_callback=matches_cb,
-            )
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
+        return StreamingResponse(
+            empty_gen(),
+            media_type="application/x-ndjson",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    tmp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            while content := await file.read(1024 * 1024):
+                tmp.write(content)
+            tmp_path = tmp.name
+    except Exception as e:
+        logging.error(f"Failed to persist uploaded PDF: {e}")
+        async def error_gen() -> AsyncIterator[str]:
+            yield _ndjson(ErrorEvent(message=f"Failed to read uploaded PDF: {e}"))
+            yield _ndjson(DoneEvent())
+
+        return StreamingResponse(
+            error_gen(),
+            media_type="application/x-ndjson",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     async def gen() -> AsyncIterator[str]:
         queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -571,14 +596,15 @@ async def annotations(
 
         async def worker() -> None:
             try:
-                if not cfg.rules:
-                    await queue.put(_ndjson(UpdateProgressEvent(stage="done", completed=0, total=0)))
-                else:
-                    await _compute(progress_cb=progress_cb, matches_cb=matches_cb)
+                if tmp_path is None:
+                    raise RuntimeError("Temporary PDF path is missing")
+                await _compute(pdf_path=tmp_path, progress_cb=progress_cb, matches_cb=matches_cb)
             except Exception as e:
                 logging.error(f"Error in annotations stream: {e}")
                 await queue.put(_ndjson(ErrorEvent(message=str(e))))
             finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
                 await queue.put(_ndjson(DoneEvent()))
                 await queue.put(None)
 

@@ -262,17 +262,13 @@ async def _process_chunk(
     if not chunk.sentences:
         return []
 
-    try:
-        coarse_hits = await _llm_find_relevant_sentences(
-            chunk,
-            rules,
-            model,
-            client,
-            debug_events
-        )
-    except Exception as e:
-        logger.error("Error in coarse sentence selection: %s", e)
-        return []
+    coarse_hits = await _llm_find_relevant_sentences(
+        chunk,
+        rules,
+        model,
+        client,
+        debug_events
+    )
 
     rule_map = {r.id: r for r in rules}
     sentence_by_id = {s.sid: s for s in chunk.sentences}
@@ -447,7 +443,7 @@ async def _llm_refine_span_boundaries(
     except Exception as e:
         error_text = str(e)
         logger.warning("Boundary refinement failed for rule %s: %s", rule.id, e)
-        return None
+        raise
     finally:
         if debug_events is not None:
             event: dict[str, Any] = {

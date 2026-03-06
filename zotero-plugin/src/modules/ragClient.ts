@@ -55,7 +55,10 @@ export class RagClient {
     return normalizeApiBaseUrl(getPref("apiBaseUrl"));
   }
 
-  public async *query(prompt: string): AsyncGenerator<QueryStreamMsg> {
+  public async *query(
+    prompt: string,
+    signal?: AbortSignal,
+  ): AsyncGenerator<QueryStreamMsg> {
     const url = `${this.baseUrl}/api/query`;
     const body: QueryIn = { prompt };
 
@@ -63,6 +66,7 @@ export class RagClient {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {

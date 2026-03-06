@@ -1,6 +1,8 @@
 prefs-title = RAG Assistant
-rag-query-button-label = Ask
+query-button-label = Ask
+stop-button-label = Stop
 querying-message = Querying...
+stopped-message = Stopped.
 error-prefix = Error: { $message }
 sources-header = Sources:
 chat-new-title = New chat

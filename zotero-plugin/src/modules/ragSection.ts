@@ -608,14 +608,40 @@ export class RagSection {
           }
         };
 
+        const createAbortController = (): AbortController | null => {
+          const scopedWin = body.ownerDocument?.defaultView;
+          if (!scopedWin?.AbortController) return null;
+          return new scopedWin.AbortController();
+        };
+
+        let activeQueryAbortController: AbortController | null = null;
+        const askLabel = getString("query-button-label");
+        const stopLabel = getString("stop-button-label");
+        const stoppedMessage = getString("stopped-message");
+        let isQueryRunning = false;
+
         const sendPrompt = async () => {
+          if (isQueryRunning) {
+            if (
+              activeQueryAbortController &&
+              !activeQueryAbortController.signal.aborted
+            ) {
+              activeQueryAbortController.abort();
+            }
+            return;
+          }
+
           const prompt = input.value.trim();
           if (!prompt) return;
 
           const sessionId = await ensureSession();
 
           input.value = "";
-          sendBtn.disabled = true;
+          const controller = createAbortController();
+          activeQueryAbortController = controller;
+          isQueryRunning = true;
+          sendBtn.textContent = stopLabel;
+          sendBtn.disabled = !controller;
 
           const userMsg = await this.chatDB!.addMessage({
             sessionId,
@@ -633,14 +659,17 @@ export class RagSection {
           appendMessageNode(pending);
           scrollToBottom();
 
+          let answer = "";
+          let sawFirstToken = false;
           try {
-            let answer = "";
             let sources: any[] = [];
-            let sawFirstToken = false;
 
             setMessageText(pending.id, getString("querying-message"));
 
-            for await (const msg of this.ragClient.query(prompt)) {
+            for await (const msg of this.ragClient.query(
+              prompt,
+              controller?.signal,
+            )) {
               if (msg.type === "updateProgress") {
                 if (!sawFirstToken) {
                   setMessageText(
@@ -680,13 +709,31 @@ export class RagSection {
             await renderMessages();
             void maybeRefreshAutoTitle(sessionId);
           } catch (e: any) {
-            await this.chatDB!.updateMessage(pending.id, {
-              content: getString("error-prefix", {
-                args: { message: e?.message ?? String(e) },
-              }),
-            });
+            const isAbortError =
+              !!e &&
+              typeof e === "object" &&
+              "name" in e &&
+              (e as { name?: string }).name === "AbortError";
+            if (isAbortError) {
+              const trimmedAnswer = answer.trim();
+              await this.chatDB!.updateMessage(pending.id, {
+                content:
+                  sawFirstToken && trimmedAnswer ? trimmedAnswer : stoppedMessage,
+              });
+            } else {
+              await this.chatDB!.updateMessage(pending.id, {
+                content: getString("error-prefix", {
+                  args: { message: e?.message ?? String(e) },
+                }),
+              });
+            }
             await renderMessages();
           } finally {
+            if (activeQueryAbortController === controller) {
+              activeQueryAbortController = null;
+            }
+            isQueryRunning = false;
+            sendBtn.textContent = askLabel;
             sendBtn.disabled = false;
             input.focus();
           }

@@ -1,5 +1,6 @@
 import randomString = Zotero.randomString;
 import { RagConfig } from "./ragClient";
+import { getString } from "../utils/locale";
 
 type RagHighlightRule = {
   id: string;
@@ -302,6 +303,7 @@ function readUiIntoConfig(popup: HTMLDivElement) {
 function ensurePopup(doc: Document, reader: any): HTMLDivElement {
   const existing = doc.getElementById("rag-highlight-popup");
   if (existing) return existing as HTMLDivElement;
+  const stopLabel = getString("stop-button-label");
 
   const popup = doc.createElement("div");
   popup.id = "rag-highlight-popup";
@@ -324,7 +326,7 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
 
         <div style="display:flex; gap:8px;">
           <button type="button" class="rag-btn" id="rag-save">Save</button>
-          <button type="button" class="rag-btn rag-btn--danger" id="rag-stop" style="display:none;">Stop</button>
+          <button type="button" class="rag-btn rag-btn--danger" id="rag-stop" style="display:none;">${stopLabel}</button>
           <button type="button" class="rag-btn rag-btn--primary" id="rag-execute">Execute</button>
         </div>
       </div>

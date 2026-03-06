@@ -193,7 +193,11 @@ def _ndjson(event: NDJSONEvent) -> str:
 def _document_id(zotero_id: str, filename: str, idx: int) -> str:
     return f"{zotero_id}_{filename}_{idx}"
 
-async def get_query_hits(prompt: str, n_results: int = 20) -> List[Hit]:
+async def get_query_hits(
+    prompt: str,
+    n_results: int = 12,
+    neighbor_top_n: int = 5,
+) -> List[Hit]:
     collection = _get_or_create_chroma_collection()
     client = _create_ollama_client()
     response = await client.embed(model=EMBEDDING_MODEL, input=prompt)
@@ -212,7 +216,7 @@ async def get_query_hits(prompt: str, n_results: int = 20) -> List[Hit]:
     docs0 = docs[0]
     metas0 = metas[0]
     hits = [create_hit(doc, metadata) for doc, metadata in zip(docs0, metas0)]
-    neighbor_ids = _get_neighbor_ids(hits)
+    neighbor_ids = _get_neighbor_ids(hits[:max(neighbor_top_n, 0)])
     if neighbor_ids:
         n_res: GetResult = collection.get(ids=list(neighbor_ids), include=["documents", "metadatas"])
         n_docs = n_res["documents"]

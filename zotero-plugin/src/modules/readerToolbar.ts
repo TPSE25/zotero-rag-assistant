@@ -77,8 +77,11 @@ function ensureRagStyles(doc: Document) {
       .rag-popup {
         position: fixed;
         z-index: 999999;
-        width: 360px;   
+        width: 360px;
         max-width: 92vw;
+        max-height: calc(100vh - 16px);
+        overflow: auto;
+        box-sizing: border-box;
         border-radius: 12px;
         border: 1px solid rgba(0,0,0,0.2);
         box-shadow: 0 12px 34px rgba(0,0,0,0.25);
@@ -121,14 +124,20 @@ function ensureRagStyles(doc: Document) {
       .rag-section-title { font-weight: 600; margin: 12px 0 6px; }
       .rag-help { opacity: 0.8; margin-bottom: 8px; }
 
-      .rag-rules { display: flex; flex-direction: column; gap: 8px; }
+      .rag-rules {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
 
       .rag-rule {
         display: grid;
-        grid-template-columns: 24px 42px 1fr 34px;
+        grid-template-columns: 24px 42px minmax(0, 1fr) 34px;
         gap: 8px;
         align-items: center;
         padding: 8px;
+        min-width: 0;
         border-radius: 12px;
         border: 1px solid rgba(0,0,0,0.18);
         background: rgba(0,0,0,0.02);
@@ -142,6 +151,10 @@ function ensureRagStyles(doc: Document) {
         padding: 7px 8px;
         outline: none;
         width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+        resize: vertical;
       }
       .rag-rule textarea:focus { border-color: rgba(0,0,0,0.38); }
 

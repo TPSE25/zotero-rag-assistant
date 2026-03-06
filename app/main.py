@@ -167,7 +167,13 @@ class Source(BaseModel):
     filename: str
     zotero_id: str
 
-class UpdateProgressEvent(BaseModel):
+class QueryUpdateProgressEvent(BaseModel):
+    type: Literal["updateProgress"] = "updateProgress"
+    stage: str
+    debug: Optional[str] = None
+
+
+class AnnotationUpdateProgressEvent(BaseModel):
     type: Literal["updateProgress"] = "updateProgress"
     stage: str
     debug: Optional[str] = None
@@ -187,7 +193,11 @@ class TokenEvent(BaseModel):
     type: Literal["token"] = "token"
     token: str
 
-class DoneEvent(BaseModel):
+class QueryDoneEvent(BaseModel):
+    type: Literal["done"] = "done"
+
+
+class AnnotationDoneEvent(BaseModel):
     type: Literal["done"] = "done"
 
 class AnnotationMatchesEvent(BaseModel):
@@ -198,19 +208,26 @@ class ErrorEvent(BaseModel):
     type: Literal["error"] = "error"
     message: str
 
-NDJSONEvent = Annotated[
+QueryNDJSONEvent = Annotated[
+    Union[QueryUpdateProgressEvent, SetSourcesEvent, TokenEvent, QueryDoneEvent],
+    Field(discriminator="type"),
+]
+
+AnnotationNDJSONEvent = Annotated[
     Union[
-        UpdateProgressEvent,
-        SetSourcesEvent,
-        TokenEvent,
+        AnnotationUpdateProgressEvent,
         AnnotationMatchesEvent,
-        DoneEvent,
+        AnnotationDoneEvent,
         ErrorEvent,
     ],
     Field(discriminator="type"),
 ]
 
-def _ndjson(event: NDJSONEvent) -> str:
+def _ndjson_query(event: QueryNDJSONEvent) -> str:
+    return event.model_dump_json() + "\n"
+
+
+def _ndjson_annotation(event: AnnotationNDJSONEvent) -> str:
     return event.model_dump_json() + "\n"
 
 
@@ -312,10 +329,10 @@ def _sanitize_title(raw: str) -> Optional[str]:
 @app.post("/api/query")
 async def query(body: QueryIn) -> StreamingResponse:
     async def gen() -> AsyncIterator[str]:
-        yield _ndjson(UpdateProgressEvent(stage="search_hits"))
+        yield _ndjson_query(QueryUpdateProgressEvent(stage="search_hits"))
         hits = await get_query_hits(body.prompt)
         context, sources = format_sources_by_file(hits)
-        yield _ndjson(SetSourcesEvent(sources=sources))
+        yield _ndjson_query(SetSourcesEvent(sources=sources))
         client = _create_ollama_client()
         enriched = f"""QUESTION:
 {body.prompt}
@@ -324,11 +341,11 @@ SOURCES:
 {context}
 """
         system_prompt = get_prompt_content("query_system")
-        yield _ndjson(UpdateProgressEvent(stage="generate_start", debug=context))
+        yield _ndjson_query(QueryUpdateProgressEvent(stage="generate_start", debug=context))
         async for part in await client.generate(model=ANSWER_MODEL, prompt=enriched, system=system_prompt, stream=True):
             print(part)
-            yield _ndjson(TokenEvent(token=part["response"]))
-        yield _ndjson(DoneEvent())
+            yield _ndjson_query(TokenEvent(token=part["response"]))
+        yield _ndjson_query(QueryDoneEvent())
     return StreamingResponse(
         gen(),
         media_type="application/x-ndjson",
@@ -550,8 +567,8 @@ async def annotations(
 
     if not cfg.rules:
         async def empty_gen() -> AsyncIterator[str]:
-            yield _ndjson(UpdateProgressEvent(stage="done", completed=0, total=0))
-            yield _ndjson(DoneEvent())
+            yield _ndjson_annotation(AnnotationUpdateProgressEvent(stage="done", completed=0, total=0))
+            yield _ndjson_annotation(AnnotationDoneEvent())
 
         return StreamingResponse(
             empty_gen(),
@@ -571,8 +588,8 @@ async def annotations(
     except Exception as e:
         logging.error(f"Failed to persist uploaded PDF: {e}")
         async def error_gen() -> AsyncIterator[str]:
-            yield _ndjson(ErrorEvent(message=f"Failed to read uploaded PDF: {e}"))
-            yield _ndjson(DoneEvent())
+            yield _ndjson_annotation(ErrorEvent(message=f"Failed to read uploaded PDF: {e}"))
+            yield _ndjson_annotation(AnnotationDoneEvent())
 
         return StreamingResponse(
             error_gen(),
@@ -587,7 +604,7 @@ async def annotations(
         queue: asyncio.Queue[str | None] = asyncio.Queue()
 
         async def progress_cb(payload: Dict[str, Any]) -> None:
-            yield_event = UpdateProgressEvent(
+            yield_event = AnnotationUpdateProgressEvent(
                 stage=cast(str, payload.get("stage", "annotation_progress")),
                 debug=cast(Optional[str], payload.get("debug")),
                 sent=cast(Optional[int], payload.get("dispatched_chunks")),
@@ -598,11 +615,11 @@ async def annotations(
                 completed=cast(Optional[int], payload.get("completed_chunks")),
                 total=cast(Optional[int], payload.get("total_chunks")),
             )
-            await queue.put(_ndjson(yield_event))
+            await queue.put(_ndjson_annotation(yield_event))
 
         async def matches_cb(partial: List[Dict[str, Any]]) -> None:
             event = AnnotationMatchesEvent(matches=[_to_rag_match(m).model_dump() for m in partial])
-            await queue.put(_ndjson(event))
+            await queue.put(_ndjson_annotation(event))
 
         async def worker() -> None:
             try:
@@ -611,11 +628,11 @@ async def annotations(
                 await _compute(pdf_path=tmp_path, progress_cb=progress_cb, matches_cb=matches_cb)
             except Exception as e:
                 logging.error(f"Error in annotations stream: {e}")
-                await queue.put(_ndjson(ErrorEvent(message=str(e))))
+                await queue.put(_ndjson_annotation(ErrorEvent(message=str(e))))
             finally:
                 if tmp_path and os.path.exists(tmp_path):
                     os.remove(tmp_path)
-                await queue.put(_ndjson(DoneEvent()))
+                await queue.put(_ndjson_annotation(AnnotationDoneEvent()))
                 await queue.put(None)
 
         task = asyncio.create_task(worker())

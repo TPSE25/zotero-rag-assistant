@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, List, Optional, Protocol
 
@@ -69,6 +69,9 @@ class LLMBoundaryResponse(BaseModel):
     spans: List[LLMBoundarySpan] = Field(default_factory=list)
 
 
+ProgressCallback = Callable[[dict[str, Any]], Awaitable[None]]
+ChunkMatchesCallback = Callable[[List[dict[str, Any]]], Awaitable[None]]
+
 
 async def process_annotations(
     pdf_path: str,
@@ -78,6 +81,8 @@ async def process_annotations(
     chunk_size: Optional[int] = None,
     debug_events: Optional[List[dict[str, Any]]] = None,
     page_range: Optional[tuple[int, int]] = None,
+    progress_callback: Optional[ProgressCallback] = None,
+    chunk_matches_callback: Optional[ChunkMatchesCallback] = None,
 ) -> List[dict[str, Any]]:
 
     recognizer = TextPlaceRecognitionPDF(pdf_path)
@@ -89,6 +94,9 @@ async def process_annotations(
 
     if not pages:
         return []
+
+    if progress_callback is not None:
+        await progress_callback({"stage": "text_extracted", "pages": len(pages)})
 
     all_tokens: List[Token] = []
     for page in pages:
@@ -102,19 +110,26 @@ async def process_annotations(
     if not all_tokens:
         return []
 
+    if progress_callback is not None:
+        await progress_callback({"stage": "tokens_indexed", "tokens": len(all_tokens)})
+
     resolved_chunk_size = chunk_size or 1600
     chunks = _create_chunks(all_tokens, chunk_size=resolved_chunk_size, overlap=150)
-
-    tasks = [
-        _process_chunk(chunk, rules, answer_model, ollama_client, debug_events)
-        for chunk in chunks
-    ]
-    chunk_results = await asyncio.gather(*tasks)
+    if progress_callback is not None:
+        await progress_callback({"stage": "chunking_done", "total_chunks": len(chunks)})
 
     seen_spans: set[tuple[str, int, int]] = set()
     final_matches: List[dict[str, Any]] = []
 
-    for chunk, results in zip(chunks, chunk_results):
+    async def _run_chunk(chunk: Chunk) -> tuple[Chunk, List[ExactSpanMatch]]:
+        return chunk, await _process_chunk(chunk, rules, answer_model, ollama_client, debug_events)
+
+    tasks = [asyncio.create_task(_run_chunk(chunk)) for chunk in chunks]
+
+    completed_chunks = 0
+    for task in asyncio.as_completed(tasks):
+        chunk, results = await task
+        chunk_matches: List[dict[str, Any]] = []
         for hit in results:
             global_start = chunk.start_index + hit.start_token
             global_end = chunk.start_index + hit.end_token
@@ -137,12 +152,31 @@ async def process_annotations(
                     for idx in range(hit.start_token, hit.end_token + 1)
                     if chunk.tokens[idx].page == page_idx
                 ]
-                final_matches.append({
+                chunk_matches.append({
                     "id": hit.rule_id,
                     "page": page_idx,
                     "rects": rects,
                     "text": " ".join(page_tokens).strip()
                 })
+
+        if chunk_matches:
+            final_matches.extend(chunk_matches)
+            if chunk_matches_callback is not None:
+                await chunk_matches_callback(chunk_matches)
+
+        completed_chunks += 1
+        if progress_callback is not None:
+            await progress_callback(
+                {
+                    "stage": "chunk_processed",
+                    "completed_chunks": completed_chunks,
+                    "total_chunks": len(chunks),
+                    "matches_so_far": len(final_matches),
+                }
+            )
+
+    if progress_callback is not None:
+        await progress_callback({"stage": "done", "matches": len(final_matches)})
 
     return final_matches
 

@@ -12,6 +12,12 @@ cd infrastructure
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
+### Reindex all WebDAV files
+```bash
+cd infrastructure
+docker compose exec webdav python /app/reindex_all.py
+```
+
 ### Production Deployment
 ```bash
 # Optional: Create document Volume if you dont want a host volume (ie. on a cloud provider or via nfs)

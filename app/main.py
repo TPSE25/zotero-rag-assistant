@@ -496,7 +496,7 @@ def _normalize_rects(rects: list[tuple[float, float, float, float] | None]) -> L
 AnnotationProgressCb = Callable[[Dict[str, Any]], Awaitable[None]]
 AnnotationMatchesCb = Callable[[List[Dict[str, Any]]], Awaitable[None]]
 
-@app.post("/api/annotations")
+@app.post("/api/annotations", response_model=None)
 async def annotations(
     request: Request,
     file: UploadFile = File(...),

@@ -11,6 +11,7 @@ export type FluentMessageId =
   | 'pref-outputDir'
   | 'pref-prompts-anno-boundary'
   | 'pref-prompts-anno-coarse'
+  | 'pref-prompts-global-hint'
   | 'pref-prompts-help'
   | 'pref-prompts-no-placeholders'
   | 'pref-prompts-placeholder-prefix'

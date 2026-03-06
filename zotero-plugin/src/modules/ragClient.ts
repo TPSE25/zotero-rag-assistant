@@ -100,6 +100,7 @@ export class RagClient {
   public async analyzePdf(
     pdf: string,
     cfg: RagConfig,
+    signal?: AbortSignal,
   ): Promise<RagAnalyzePdfResponse> {
     const win = Zotero.getMainWindow();
     const url = `${this.baseUrl}/api/annotations`;
@@ -119,6 +120,7 @@ export class RagClient {
     const res = await fetch(url, {
       method: "POST",
       body: fd,
+      signal,
     });
 
     if (!res.ok) {

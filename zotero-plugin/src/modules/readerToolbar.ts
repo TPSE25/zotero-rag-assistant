@@ -17,6 +17,13 @@ function newRuleId() {
 }
 
 let popupCfg: RagPopupConfig = { rules: [] };
+let activeExecuteAbortController: AbortController | null = null;
+
+function createAbortControllerFromDoc(doc: Document): AbortController | null {
+  const win = doc.defaultView
+  if (!win?.AbortController) return null;
+  return new win.AbortController();
+}
 
 function getPrefKey(): string {
   const addonRef = addon?.data?.config?.addonRef as string | undefined;
@@ -199,6 +206,12 @@ function ensureRagStyles(doc: Document) {
       }
       .rag-btn:hover { background: rgba(0,0,0,0.08); }
       .rag-btn--primary { background: rgba(0,0,0,0.08); }
+      .rag-btn--danger {
+        border-color: rgba(180,0,0,0.45);
+      }
+      .rag-btn--danger:hover {
+        background: rgba(180,0,0,0.12);
+      }
     `;
   safeAppend(doc, style);
 }
@@ -268,6 +281,7 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
 
         <div style="display:flex; gap:8px;">
           <button type="button" class="rag-btn" id="rag-save">Save</button>
+          <button type="button" class="rag-btn rag-btn--danger" id="rag-stop" style="display:none;">Stop</button>
           <button type="button" class="rag-btn rag-btn--primary" id="rag-execute">Execute</button>
         </div>
       </div>
@@ -327,10 +341,21 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
   });
   popup.querySelector("#rag-execute")!.addEventListener("click", async () => {
     const executeBtn = popup.querySelector<HTMLButtonElement>("#rag-execute")!;
+    const stopBtn = popup.querySelector<HTMLButtonElement>("#rag-stop")!;
+    const saveBtn = popup.querySelector<HTMLButtonElement>("#rag-save")!;
     const oldLabel = executeBtn.textContent ?? "Execute";
+    const controller = createAbortControllerFromDoc(popup.ownerDocument!);
+    activeExecuteAbortController = controller;
+
+    stopBtn.style.display = controller ? "" : "none";
+    stopBtn.disabled = !controller;
+    stopBtn.onclick = () => {
+      if (controller && !controller.signal.aborted) controller.abort();
+    };
 
     try {
       executeBtn.disabled = true;
+      saveBtn.disabled = true;
       executeBtn.textContent = "Working…";
 
       readUiIntoConfig(popup);
@@ -346,7 +371,11 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
           .filter((r) => r.enabled)
           .map((r) => ({ id: r.id, termsRaw: r.termsRaw })),
       };
-      const resp = await client.analyzePdf(pdfBlob, request);
+      const resp = await client.analyzePdf(
+        pdfBlob,
+        request,
+        controller?.signal,
+      );
       const created = await createHighlightsFromAnalyzeResponse(
         reader,
         popupCfg,
@@ -356,11 +385,26 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
         `RAG: created ${created} annotations`,
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      Zotero.debug?.(`RAG execute failed: ${msg}`);
-      reader._iframeWindow?.alert?.(`RAG failed: ${msg}`);
+      const maybeAbortError =
+        !!e &&
+        typeof e === "object" &&
+        "name" in e &&
+        (e as { name?: string }).name === "AbortError";
+      if (maybeAbortError) {
+        reader._iframeWindow?.console?.log?.("RAG: highlight execution stopped");
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        Zotero.debug?.(`RAG execute failed: ${msg}`);
+        reader._iframeWindow?.alert?.(`RAG failed: ${msg}`);
+      }
     } finally {
+      if (activeExecuteAbortController === controller) {
+        activeExecuteAbortController = null;
+      }
+      stopBtn.style.display = "none";
+      stopBtn.onclick = null;
       executeBtn.disabled = false;
+      saveBtn.disabled = false;
       executeBtn.textContent = oldLabel;
     }
   });

@@ -37,6 +37,7 @@ export type RagHighlightRule = {
 
 export type RagConfig = {
   rules: RagHighlightRule[];
+  pageRange?: string;
 };
 
 export type RagPdfMatch = {

@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import sys
 import tempfile
 
@@ -445,6 +446,37 @@ class RagHighlightRule(BaseModel):
 class RagPopupConfig(BaseModel):
     rules: list[RagHighlightRule]
     chunkLength: int | None = Field(default=None, ge=32, le=20000)
+    pageRange: str | None = None
+
+
+def _parse_page_range(raw: str | None) -> tuple[int, int] | None:
+    if raw is None:
+        return None
+
+    value = raw.strip()
+    if not value:
+        return None
+
+    single = re.fullmatch(r"(\d+)", value)
+    if single:
+        page = int(single.group(1))
+        if page < 1:
+            raise HTTPException(status_code=422, detail="pageRange must start at page 1")
+        page_idx = page - 1
+        return page_idx, page_idx
+
+    span = re.fullmatch(r"(\d+)\s*-\s*(\d+)", value)
+    if not span:
+        raise HTTPException(status_code=422, detail="pageRange must be like '3' or '3-7'")
+
+    start_page = int(span.group(1))
+    end_page = int(span.group(2))
+    if start_page < 1 or end_page < 1:
+        raise HTTPException(status_code=422, detail="pageRange must start at page 1")
+    if end_page < start_page:
+        raise HTTPException(status_code=422, detail="pageRange end must be >= start")
+
+    return start_page - 1, end_page - 1
 
 def _normalize_rects(rects: list[tuple[float, float, float, float] | None]) -> List[List[float]]:
     out: List[List[float]] = []
@@ -461,6 +493,7 @@ async def annotations(
     ollama_client: AsyncClient = Depends(_create_ollama_client)
 ) -> AnnotationsResponse:
     cfg = RagPopupConfig.model_validate_json(config)
+    page_range = _parse_page_range(cfg.pageRange)
     if not cfg.rules:
         return AnnotationsResponse(matches=[], llmDebug=[])
 
@@ -480,7 +513,8 @@ async def annotations(
             answer_model=ANSWER_MODEL,
             ollama_client=ollama_client,
             chunk_size=cfg.chunkLength,
-            debug_events=llm_debug
+            debug_events=llm_debug,
+            page_range=page_range
         )
 
         matches = [

@@ -10,13 +10,14 @@ type RagHighlightRule = {
 
 export type RagPopupConfig = {
   rules: RagHighlightRule[];
+  pageRange: string;
 };
 
 function newRuleId() {
   return `rule_${randomString(10)}`;
 }
 
-let popupCfg: RagPopupConfig = { rules: [] };
+let popupCfg: RagPopupConfig = { rules: [], pageRange: "" };
 let activeExecuteAbortController: AbortController | null = null;
 
 function createAbortControllerFromDoc(doc: Document): AbortController | null {
@@ -45,9 +46,8 @@ function isPopupVisible(popup: HTMLElement): boolean {
 function loadCfgFromPrefs(): RagPopupConfig {
   try {
     const raw = Zotero.Prefs.get(getPrefKey(), true) as string | undefined;
-    return raw
-      ? JSON.parse(raw)
-      : {
+    if (!raw) {
+      return {
           rules: [
             {
               id: newRuleId(),
@@ -56,10 +56,18 @@ function loadCfgFromPrefs(): RagPopupConfig {
               termsRaw: "",
             },
           ],
+          pageRange: "",
         };
+    }
+
+    const parsed = JSON.parse(raw) as Partial<RagPopupConfig>;
+    return {
+      rules: Array.isArray(parsed.rules) ? parsed.rules : [],
+      pageRange: typeof parsed.pageRange === "string" ? parsed.pageRange : "",
+    };
   } catch (e) {
     Zotero.debug?.(`RAG: failed to load prefs: ${String(e)}`);
-    return { rules: [] };
+    return { rules: [], pageRange: "" };
   }
 }
 
@@ -196,6 +204,28 @@ function ensureRagStyles(doc: Document) {
         margin-top: 12px;
       }
 
+      .rag-page-range {
+        margin-top: 10px;
+      }
+
+      .rag-page-range label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .rag-page-range input {
+        width: 100%;
+        border: 1px solid rgba(0,0,0,0.22);
+        border-radius: 10px;
+        background: transparent;
+        color: inherit;
+        padding: 7px 8px;
+        outline: none;
+        box-sizing: border-box;
+      }
+      .rag-page-range input:focus { border-color: rgba(0,0,0,0.38); }
+
       .rag-btn {
         padding: 6px 10px;
         border-radius: 10px;
@@ -241,6 +271,10 @@ function renderRules(popup: HTMLDivElement) {
 
     rulesHost.appendChild(row);
   }
+
+  const pageRangeInput =
+    popup.querySelector<HTMLInputElement>("#rag-page-range");
+  if (pageRangeInput) pageRangeInput.value = popupCfg.pageRange;
 }
 
 function readUiIntoConfig(popup: HTMLDivElement) {
@@ -257,7 +291,12 @@ function readUiIntoConfig(popup: HTMLDivElement) {
     };
   });
 
-  popupCfg = { rules };
+  const pageRangeInput =
+    popup.querySelector<HTMLInputElement>("#rag-page-range");
+  popupCfg = {
+    rules,
+    pageRange: pageRangeInput?.value.trim() ?? "",
+  };
 }
 
 function ensurePopup(doc: Document, reader: any): HTMLDivElement {
@@ -275,6 +314,10 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
       </div>
 
       <div id="rag-rules" class="rag-rules"></div>
+      <div class="rag-page-range">
+        <label for="rag-page-range">Page range</label>
+        <input id="rag-page-range" type="text" placeholder="e.g. 3 or 3-7" />
+      </div>
 
       <div class="rag-actions">
         <button type="button" class="rag-btn" id="rag-add-rule">+ Add rule</button>
@@ -294,6 +337,16 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
   popup
     .querySelector<HTMLButtonElement>("#rag-popup-close")!
     .addEventListener("click", close);
+
+  popup.addEventListener("keydown", (e: KeyboardEvent) => {
+    const target = e.target as Element | null;
+    if (!target) return;
+
+    // Keep reader-level key bindings from hijacking typing/edit keys in popup fields.
+    if (target.closest("input, textarea, [contenteditable='true']")) {
+      e.stopPropagation();
+    }
+  });
 
   if (!popup.dataset.ragDocBound) {
     popup.dataset.ragDocBound = "1";
@@ -370,6 +423,7 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
         rules: popupCfg.rules
           .filter((r) => r.enabled)
           .map((r) => ({ id: r.id, termsRaw: r.termsRaw })),
+        pageRange: popupCfg.pageRange || undefined,
       };
       const resp = await client.analyzePdf(
         pdfBlob,

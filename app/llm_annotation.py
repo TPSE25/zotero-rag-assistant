@@ -77,10 +77,15 @@ async def process_annotations(
     ollama_client: AsyncClient,
     chunk_size: Optional[int] = None,
     debug_events: Optional[List[dict[str, Any]]] = None,
+    page_range: Optional[tuple[int, int]] = None,
 ) -> List[dict[str, Any]]:
 
     recognizer = TextPlaceRecognitionPDF(pdf_path)
     pages = recognizer.extract_text()
+
+    if page_range is not None:
+        start_page, end_page = page_range
+        pages = [p for p in pages if start_page <= p["page"] <= end_page]
 
     if not pages:
         return []

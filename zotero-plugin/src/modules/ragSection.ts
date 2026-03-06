@@ -749,8 +749,8 @@ export class RagSection {
 
         sendBtn.onclick = sendPrompt;
         input.onkeydown = (e) => {
-          assert(e instanceof KeyboardEvent);
-          if (e.key === "Enter") {
+          const ke = e as KeyboardEvent;
+          if (ke.key === "Enter") {
             e.preventDefault();
             void sendPrompt();
           }

@@ -172,6 +172,10 @@ class UpdateProgressEvent(BaseModel):
     stage: str
     debug: Optional[str] = None
     sent: Optional[int] = None
+    chunk: Optional[int] = None
+    marker: Optional[int] = None
+    markerTotal: Optional[int] = None
+    markerId: Optional[str] = None
     completed: Optional[int] = None
     total: Optional[int] = None
 
@@ -587,6 +591,10 @@ async def annotations(
                 stage=cast(str, payload.get("stage", "annotation_progress")),
                 debug=cast(Optional[str], payload.get("debug")),
                 sent=cast(Optional[int], payload.get("dispatched_chunks")),
+                chunk=cast(Optional[int], payload.get("chunk_number")),
+                marker=cast(Optional[int], payload.get("marker_index")),
+                markerTotal=cast(Optional[int], payload.get("marker_total")),
+                markerId=cast(Optional[str], payload.get("marker_id")),
                 completed=cast(Optional[int], payload.get("completed_chunks")),
                 total=cast(Optional[int], payload.get("total_chunks")),
             )

@@ -121,13 +121,34 @@ async def process_annotations(
     seen_spans: set[tuple[str, int, int]] = set()
     final_matches: List[dict[str, Any]] = []
 
-    async def _run_chunk(chunk: Chunk) -> tuple[Chunk, List[ExactSpanMatch]]:
-        return chunk, await _process_chunk(chunk, rules, answer_model, ollama_client, debug_events)
+    async def _run_chunk(
+        chunk: Chunk,
+        chunk_number: int,
+        total_chunks: int,
+    ) -> tuple[int, Chunk, List[ExactSpanMatch]]:
+        if progress_callback is not None:
+            await progress_callback(
+                {
+                    "stage": "chunk_started",
+                    "chunk_number": chunk_number,
+                    "total_chunks": total_chunks,
+                }
+            )
+        return chunk_number, chunk, await _process_chunk(
+            chunk,
+            rules,
+            answer_model,
+            ollama_client,
+            debug_events,
+            progress_callback=progress_callback,
+            chunk_number=chunk_number,
+            total_chunks=total_chunks,
+        )
 
-    tasks: List[asyncio.Task[tuple[Chunk, List[ExactSpanMatch]]]] = []
+    tasks: List[asyncio.Task[tuple[int, Chunk, List[ExactSpanMatch]]]] = []
     dispatched_chunks = 0
-    for chunk in chunks:
-        tasks.append(asyncio.create_task(_run_chunk(chunk)))
+    for i, chunk in enumerate(chunks, start=1):
+        tasks.append(asyncio.create_task(_run_chunk(chunk, i, len(chunks))))
         dispatched_chunks += 1
         if progress_callback is not None:
             await progress_callback(
@@ -140,7 +161,7 @@ async def process_annotations(
 
     completed_chunks = 0
     for task in asyncio.as_completed(tasks):
-        chunk, results = await task
+        _, chunk, results = await task
         chunk_matches: List[dict[str, Any]] = []
         for hit in results:
             global_start = chunk.start_index + hit.start_token
@@ -270,6 +291,9 @@ async def _process_chunk(
         model: str,
         client: AsyncClient,
         debug_events: Optional[List[dict[str, Any]]] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+        chunk_number: Optional[int] = None,
+        total_chunks: Optional[int] = None,
 ) -> List[ExactSpanMatch]:
     if not chunk.sentences:
         return []
@@ -288,7 +312,28 @@ async def _process_chunk(
 
     exact_matches: List[ExactSpanMatch] = []
 
-    for hit in coarse_hits:
+    total_markers = len(coarse_hits)
+    if progress_callback is not None and total_markers == 0:
+        await progress_callback(
+            {
+                "stage": "marker_progress",
+                "chunk_number": chunk_number,
+                "total_chunks": total_chunks,
+            }
+        )
+
+    for marker_index, hit in enumerate(coarse_hits, start=1):
+        if progress_callback is not None:
+            await progress_callback(
+                {
+                    "stage": "marker_progress",
+                    "chunk_number": chunk_number,
+                    "total_chunks": total_chunks,
+                    "marker_index": marker_index,
+                    "marker_total": total_markers,
+                    "marker_id": hit.rule_id,
+                }
+            )
         if hit.rule_id not in rule_map:
             continue
 

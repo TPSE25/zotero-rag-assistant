@@ -23,7 +23,7 @@ class PromptSpec:
 
 
 PROMPTS_DIR = Path(os.getenv("PROMPTS_DIR", "/prompts"))
-DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parent / "default_prompts"
+DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parents[2] / "default_prompts"
 
 
 PROMPT_SPECS: dict[str, PromptSpec] = {

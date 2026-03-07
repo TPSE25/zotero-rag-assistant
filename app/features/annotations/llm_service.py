@@ -11,8 +11,8 @@ from typing import Any, List, Optional, Protocol
 from ollama import AsyncClient
 from pydantic import BaseModel, Field
 
-from prompt_store import render_prompt
-from text_place_recognition_pdf import TextPlaceRecognitionPDF, Rect
+from features.annotations.pdf_text_recognition import Rect, TextPlaceRecognitionPDF
+from features.prompts.store import render_prompt
 
 logger = logging.getLogger(__name__)
 

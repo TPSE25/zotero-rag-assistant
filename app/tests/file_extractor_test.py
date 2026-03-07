@@ -1,5 +1,5 @@
 from pathlib import Path
-from file_extractor import extract_from_pdf, extract_from_zip, extract_auto
+from services.document.file_extractor import extract_auto, extract_from_pdf, extract_from_zip
 
 # Folder with your test files
 TEST_FILES_DIR = Path(__file__).parent / "test_data_file_extractor"

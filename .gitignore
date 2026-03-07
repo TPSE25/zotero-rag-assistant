@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 env/
 venv/
+.venv-ci/
 
 # ===== OS =====
 .DS_Store

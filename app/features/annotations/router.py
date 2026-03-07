@@ -88,10 +88,10 @@ async def annotations(
             tmp_path = tmp.name
     except Exception as e:
         logging.error(f"Failed to persist uploaded PDF: {e}")
+        error_message = f"Failed to read uploaded PDF: {e}"
 
         async def error_gen() -> AsyncIterator[str]:
-            message = f"Failed to read uploaded PDF: {e}"
-            yield ndjson_annotation(ErrorEvent(message=message))
+            yield ndjson_annotation(ErrorEvent(message=error_message))
             yield ndjson_annotation(AnnotationDoneEvent())
 
         return StreamingResponse(

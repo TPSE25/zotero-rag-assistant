@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
-from text_chunking import TextChunker
-from file_extractor import extract_from_pdf, extract_from_zip, extract_auto
+from services.document.file_extractor import extract_auto, extract_from_pdf, extract_from_zip
+from services.document.text_chunking import TextChunker
 
 # Folder with your test files
 TEST_FILES_DIR = Path(__file__).parent / "test_data_file_extractor"

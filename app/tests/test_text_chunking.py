@@ -1,5 +1,5 @@
 import pytest 
-from text_chunking import TextChunker
+from services.document.text_chunking import TextChunker
 
 """
 This tests the text chunker.

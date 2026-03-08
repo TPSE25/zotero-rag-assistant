@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 class QueryIn(BaseModel):
     prompt: str
+    messages: Optional[List["ChatTitleMessage"]] = None
+    sources: Optional[List["Source"]] = None
 
 
 class ChatTitleMessage(BaseModel):

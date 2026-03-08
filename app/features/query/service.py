@@ -9,6 +9,28 @@ from core.types import Embedding
 from features.query.schemas import Hit, Source
 
 
+def source_key(source: Source) -> tuple[str, str]:
+    return (source.zotero_id, source.filename)
+
+
+def normalize_sources(existing_sources: List[Source]) -> List[Source]:
+    deduped: List[Source] = []
+    seen: set[tuple[str, str]] = set()
+    for source in existing_sources:
+        key = source_key(source)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(
+            Source(
+                id=f"S{len(deduped) + 1}",
+                filename=source.filename,
+                zotero_id=source.zotero_id,
+            )
+        )
+    return deduped
+
+
 def _document_id(zotero_id: str, filename: str, idx: int) -> str:
     return f"{zotero_id}_{filename}_{idx}"
 
@@ -67,20 +89,32 @@ async def get_query_hits(
     return hits
 
 
-def format_sources_by_file(hits: List[Hit]) -> Tuple[str, List[Source]]:
+def format_sources_by_file(
+    hits: List[Hit],
+    existing_sources: Optional[List[Source]] = None,
+) -> Tuple[str, List[Source]]:
+    prior = normalize_sources(existing_sources or [])
     by_file: Dict[str, Tuple[str, List[Hit]]] = {}
+    sources: List[Source] = list(prior)
+    key_to_id: Dict[tuple[str, str], str] = {
+        source_key(s): s.id for s in sources
+    }
 
     for hit in hits:
-        if hit.filename not in by_file:
-            by_file[hit.filename] = (hit.zotero_id, [])
-        by_file[hit.filename][1].append(hit)
+        key = (hit.zotero_id, hit.filename)
+        if key not in key_to_id:
+            sid = f"S{len(sources) + 1}"
+            key_to_id[key] = sid
+            sources.append(Source(id=sid, filename=hit.filename, zotero_id=hit.zotero_id))
+        group_key = f"{key_to_id[key]}\0{hit.zotero_id}\0{hit.filename}"
+        if group_key not in by_file:
+            by_file[group_key] = (hit.zotero_id, [])
+        by_file[group_key][1].append(hit)
 
     blocks: List[str] = []
-    sources: List[Source] = []
 
-    for i, (filename, (zotero_id, excerpts)) in enumerate(by_file.items(), start=1):
-        sid = f"S{i}"
-        sources.append(Source(id=sid, filename=filename, zotero_id=zotero_id))
+    for group_key, (_zotero_id, excerpts) in by_file.items():
+        sid, _key_zotero_id, filename = group_key.split("\0", 2)
         excerpts_formatted = [
             f"(chunk {hit.chunk_index}) {hit.text.strip()}"
             for hit in sorted(excerpts, key=lambda x: x.chunk_index)

@@ -1004,6 +1004,24 @@ export class RagSection {
         const stoppedMessage = getString("stopped-message");
         let isQueryRunning = false;
 
+        const collectAppendOnlySources = (messages: ChatMessage[]): Source[] => {
+          const out: Source[] = [];
+          const seen = new Set<string>();
+          for (const message of messages) {
+            for (const source of message.sources ?? []) {
+              const key = `${source.zotero_id}\0${source.filename}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              out.push({
+                id: `S${out.length + 1}`,
+                filename: source.filename,
+                zotero_id: source.zotero_id,
+              });
+            }
+          }
+          return out;
+        };
+
         const sendPrompt = async () => {
           if (isQueryRunning) {
             if (
@@ -1027,6 +1045,15 @@ export class RagSection {
           sendBtn.textContent = stopLabel;
           sendBtn.disabled = !controller;
 
+          const historyMessages = await this.chatDB!.listMessages(sessionId);
+
+          const modelMessages: ChatTitleMessage[] = historyMessages
+            .filter((m) => (m.content ?? "").trim().length > 0)
+            .map((m) => ({
+              role: m.role,
+              content: m.content,
+            }));
+          const appendOnlySources = collectAppendOnlySources(historyMessages);
           const userMsg = await this.chatDB!.addMessage({
             sessionId,
             role: "user",
@@ -1046,12 +1073,14 @@ export class RagSection {
           let answer = "";
           let sawFirstToken = false;
           try {
-            let sources: any[] = [];
+            let sources: Source[] = [];
 
             setMessageText(pending.id, getString("querying-message"));
 
             for await (const msg of this.ragClient.query(
               prompt,
+              modelMessages,
+              appendOnlySources,
               controller?.signal,
             )) {
               if (msg.type === "updateProgress") {

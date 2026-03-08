@@ -3,6 +3,8 @@ import { normalizeApiBaseUrl } from "../utils/serverConfig";
 
 export interface QueryIn {
   prompt: string;
+  messages?: ChatTitleMessage[];
+  sources?: Source[];
 }
 
 export interface ChatTitleMessage {
@@ -88,10 +90,12 @@ export class RagClient {
 
   public async *query(
     prompt: string,
+    messages?: ChatTitleMessage[],
+    sources?: Source[],
     signal?: AbortSignal,
   ): AsyncGenerator<QueryStreamMsg> {
     const url = `${this.baseUrl}/api/query`;
-    const body: QueryIn = { prompt };
+    const body: QueryIn = { prompt, messages, sources };
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -44,6 +44,7 @@ export type RagPdfMatch = {
   id: string;
   pageIndex: number;
   rects: number[][];
+  text?: string | null;
 };
 
 export type AnnotationProgressEvent = {
@@ -57,6 +58,24 @@ export type AnnotationProgressEvent = {
   completed?: number;
   total?: number;
 };
+
+export type AnnotationStreamMsg =
+  | {
+      type: "updateProgress";
+      stage: string;
+      debug?: string;
+      sent?: number;
+      chunk?: number;
+      marker?: number;
+      markerTotal?: number;
+      markerId?: string;
+      completed?: number;
+      total?: number;
+    }
+  | { type: "annotationConcurrency"; activeRequests: number }
+  | { type: "annotationMatches"; matches: RagPdfMatch[] }
+  | { type: "error"; message: string }
+  | { type: "done" };
 
 export class RagClient {
   private get baseUrl(): string {
@@ -109,6 +128,23 @@ export class RagClient {
     onProgress?: (event: AnnotationProgressEvent) => void,
     onMatches?: (matches: RagPdfMatch[]) => void,
   ): Promise<void> {
+    const allMatches: RagPdfMatch[] = [];
+    for await (const msg of this.analyzePdfStream(pdf, cfg, signal)) {
+      if (msg.type === "error") {
+        throw new Error(msg.message || "Annotation stream failed");
+      }
+      if (msg.type === "annotationMatches") {
+        allMatches.push(...msg.matches);
+      }
+    }
+    return { matches: allMatches };
+  }
+
+  public async *analyzePdfStream(
+    pdf: string,
+    cfg: RagConfig,
+    signal?: AbortSignal,
+  ): AsyncGenerator<AnnotationStreamMsg> {
     const win = Zotero.getMainWindow();
     const url = `${this.baseUrl}/api/annotations`;
     const fd = new win.FormData();
@@ -123,7 +159,13 @@ export class RagClient {
     );
     fd.append("config", JSON.stringify(cfg));
 
-    const res = await fetch(url, { method: "POST", body: fd, signal });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Accept: "application/x-ndjson" },
+      body: fd,
+      signal,
+    });
+
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(
@@ -131,7 +173,9 @@ export class RagClient {
       );
     }
     if (!res.body) {
-      throw new Error("Streaming not supported: response.body is null");
+      throw new Error(
+        "Streaming not supported for /api/annotations: response.body is null",
+      );
     }
 
     const reader = res.body.getReader();
@@ -148,21 +192,12 @@ export class RagClient {
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-        const event = JSON.parse(trimmed);
-        if (event.type === "updateProgress") onProgress?.(event);
-        if (event.type === "annotationMatches") onMatches?.(event.matches);
-        if (event.type === "error") throw new Error(event.message);
-        if (event.type === "done") return;
+        yield JSON.parse(trimmed) as AnnotationStreamMsg;
       }
     }
 
     const tail = buf.trim();
-    if (tail) {
-      const event = JSON.parse(tail);
-      if (event.type === "updateProgress") onProgress?.(event);
-      if (event.type === "annotationMatches") onMatches?.(event.matches);
-      if (event.type === "error") throw new Error(event.message);
-    }
+    if (tail) yield JSON.parse(tail) as AnnotationStreamMsg;
   }
 
   public async generateChatTitle(

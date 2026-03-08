@@ -6,8 +6,7 @@ import httpx
 
 ROOT_DIR = Path(os.getenv("ROOT_DIR", "/var/lib/webdav/data"))
 CORE_API_URL = os.getenv("CORE_API_URL", "http://core:8000/internal/file-changed")
-TIMEOUT_SECONDS = float(os.getenv("REINDEX_TIMEOUT", "30"))
-EVENT_TYPE = os.getenv("REINDEX_EVENT_TYPE", "PUT")
+TIMEOUT_SECONDS = float(os.getenv("REINDEX_TIMEOUT", "60"))
 
 
 def iter_files(root: Path) -> list[Path]:
@@ -25,7 +24,7 @@ def post_file(client: httpx.Client, root: Path, file_path: Path) -> None:
     with file_path.open("rb") as f:
         response = client.post(
             CORE_API_URL,
-            data={"filename": rel, "event_type": EVENT_TYPE},
+            data={"filename": rel, "event_type": "PUT"},
             files={"file": (rel, f)},
         )
     response.raise_for_status()

@@ -51,7 +51,8 @@ async def file_changed_hook(
 
         chunker = TextChunker()
         cleaned_text = chunker.clean_text(text)
-        chunks = chunker.chunk_text(cleaned_text)
+        chunks_with_pages = chunker.chunk_text_with_pages(cleaned_text)
+        chunks = [chunk for chunk, _page_start, _page_end in chunks_with_pages]
 
         if not chunks:
             logging.info(f"No chunks extracted from {fname}")
@@ -61,10 +62,18 @@ async def file_changed_hook(
         embeddings: list[Embedding] = [cast(Sequence[float], e) for e in response.embeddings]
 
         ids = [_document_id(zotero_id, fname, i) for i in range(len(chunks))]
-        metadatas: list[ChromaMetadata] = [
-            {"filename": fname, "zotero_id": zotero_id, "chunk_index": i}
-            for i in range(len(chunks))
-        ]
+        metadatas: list[ChromaMetadata] = []
+        for i, (_chunk, page_start, page_end) in enumerate(chunks_with_pages):
+            metadata: dict[str, object] = {
+                "filename": fname,
+                "zotero_id": zotero_id,
+                "chunk_index": i,
+            }
+            if page_start is not None:
+                metadata["page_start"] = page_start
+            if page_end is not None:
+                metadata["page_end"] = page_end
+            metadatas.append(cast(ChromaMetadata, metadata))
 
         collection.add(
             ids=ids,

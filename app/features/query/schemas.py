@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 class QueryIn(BaseModel):
     prompt: str
+    messages: Optional[List["ChatTitleMessage"]] = None
+    sources: Optional[List["Source"]] = None
 
 
 class ChatTitleMessage(BaseModel):
@@ -26,12 +28,15 @@ class Hit(BaseModel):
     filename: str
     zotero_id: str
     chunk_index: int
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
 
 
 class Source(BaseModel):
     id: str
     filename: str
     zotero_id: str
+    pages: Optional[List[int]] = None
 
 
 class QueryUpdateProgressEvent(BaseModel):

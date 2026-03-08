@@ -18,7 +18,12 @@ from features.query.schemas import (
     TokenEvent,
     ndjson_query,
 )
-from features.query.service import format_sources_by_file, get_query_hits, sanitize_title
+from features.query.service import (
+    format_sources_by_file,
+    get_query_hits,
+    normalize_sources,
+    sanitize_title,
+)
 from features.prompts.store import get_prompt_content
 
 router = APIRouter(tags=["query"])
@@ -27,26 +32,37 @@ router = APIRouter(tags=["query"])
 @router.post("/api/query")
 async def query(body: QueryIn) -> StreamingResponse:
     async def gen() -> AsyncIterator[str]:
+        prior_messages = [m for m in (body.messages or []) if m.content.strip()]
+        source_list = normalize_sources(body.sources or [])
+
         yield ndjson_query(QueryUpdateProgressEvent(stage="search_hits"))
         hits = await get_query_hits(body.prompt)
-        context, sources = format_sources_by_file(hits)
+        context, sources = format_sources_by_file(hits, existing_sources=source_list)
         yield ndjson_query(SetSourcesEvent(sources=sources))
         client = create_ollama_client()
-        enriched = f"""QUESTION:
-{body.prompt}
-
-SOURCES:
-{context}
-"""
+        source_context = "SOURCES:\n" + (
+            context.strip() if context.strip() else "(none)"
+        )
         system_prompt = get_prompt_content("query_system")
         yield ndjson_query(QueryUpdateProgressEvent(stage="generate_start", debug=context))
-        async for part in await client.generate(
+        chat_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": source_context},
+            *[
+                {"role": m.role, "content": m.content.strip()}
+                for m in prior_messages
+            ],
+            {"role": "user", "content": body.prompt},
+        ]
+
+        async for part in await client.chat(
             model=ANSWER_MODEL,
-            prompt=enriched,
-            system=system_prompt,
+            messages=chat_messages,
             stream=True,
         ):
-            yield ndjson_query(TokenEvent(token=part["response"]))
+            token = part.get("message", {}).get("content", "")
+            if token:
+                yield ndjson_query(TokenEvent(token=token))
         yield ndjson_query(QueryDoneEvent())
 
     return StreamingResponse(

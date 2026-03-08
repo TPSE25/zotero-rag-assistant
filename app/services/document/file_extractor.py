@@ -40,7 +40,7 @@ def extract_from_pdf(file_path_or_bytes: Union[str, bytes, Path]) -> str:
         pages = []
 
         with pdfplumber.open(pdf_file) as pdf:
-            for page in pdf.pages:
+            for page_number, page in enumerate(pdf.pages, start=1):
                 page_text = ""
 
                 # 1. Extract regular text
@@ -62,7 +62,7 @@ def extract_from_pdf(file_path_or_bytes: Union[str, bytes, Path]) -> str:
                             page_text += "\n[Figure] " + line.strip() + "\n"
 
                 if page_text.strip():
-                    pages.append(page_text.strip())
+                    pages.append(f"[[PAGE:{page_number}]]\n{page_text.strip()}")
 
         combined_text = "\n\n".join(pages)
         return clean_pdf_text(combined_text)

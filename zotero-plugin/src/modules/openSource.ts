@@ -10,7 +10,11 @@ export const showZoteroSource = async (zoteroId: string, open: boolean) => {
   if (!pane) throw new Error("ZoteroPane not available");
 
   let item: any = await resolveItem(zoteroId);
-  if (!item) return;
+  if (!item) {
+    throw new Error(
+      `Source item "${zoteroId}" was not found in the current user library.`,
+    );
+  }
 
   try {
     pane.selectItem?.(item.id);

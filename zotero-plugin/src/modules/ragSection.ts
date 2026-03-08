@@ -232,6 +232,8 @@ export class RagSection {
               background-color: Canvas;
               color: CanvasText;
               min-width: 0;
+              max-width: 100%;
+              overflow-x: hidden;
             }
         
             #rag-tabs-row {
@@ -312,7 +314,9 @@ export class RagSection {
               display: block;
               flex: 1;
               overflow: auto;
+              overflow-x: hidden;
               padding: 8px;
+              min-width: 0;
         
               background-color: Canvas;
               color: CanvasText;
@@ -325,6 +329,7 @@ export class RagSection {
               display: flex;
               flex-direction: row;
               margin: 6px 0;
+              min-width: 0;
             }
             .rag-msg-row.is-user { justify-content: flex-end; }
             .rag-msg-row.is-assistant { justify-content: flex-start; }
@@ -332,6 +337,8 @@ export class RagSection {
             .rag-bubble {
               display: block;
               max-width: 85%;
+              min-width: 0;
+              overflow: hidden;
               border: 1px solid GrayText;
               border-radius: 10px;
               padding: 8px;
@@ -349,6 +356,16 @@ export class RagSection {
             .rag-bubble-text {
               display: block;
               user-select: text;
+              min-width: 0;
+              max-width: 100%;
+              overflow-wrap: anywhere;
+              word-break: break-word;
+            }
+            .rag-bubble-text * {
+              max-width: 100%;
+              min-width: 0;
+              overflow-wrap: anywhere;
+              word-break: break-word;
             }
 
             .rag-bubble-text.is-plain {
@@ -389,18 +406,23 @@ export class RagSection {
               background: color-mix(in srgb, CanvasText 8%, Canvas);
               padding: 0.05em 0.25em;
               border-radius: 4px;
+              white-space: pre-wrap;
             }
             .rag-bubble-text .rag-code-block {
               margin: 0.25em 0;
               padding: 0.55em;
               border: 1px solid GrayText;
               border-radius: 6px;
-              overflow-x: auto;
+              overflow-x: hidden;
+              max-width: 100%;
+              box-sizing: border-box;
+              white-space: pre-wrap;
               background: color-mix(in srgb, CanvasText 6%, Canvas);
             }
             .rag-bubble-text .rag-code-block code {
               background: transparent;
               padding: 0;
+              white-space: pre-wrap;
             }
             .rag-bubble-text a {
               text-decoration: underline;
@@ -429,6 +451,8 @@ export class RagSection {
             .rag-sources-line {
               display: block;
               white-space: pre-wrap;
+              overflow-wrap: anywhere;
+              word-break: break-word;
               cursor: pointer;
             }
             .rag-sources-line:hover {
@@ -440,11 +464,14 @@ export class RagSection {
               flex-direction: row;
               gap: 6px;
               align-items: center;
+              min-width: 0;
             }
         
             #rag-query-input {
               display: block;
               flex: 1;
+              min-width: 0;
+              width: 0;
               line-height: 28px;
               padding: 0 8px;
             }
@@ -471,6 +498,7 @@ export class RagSection {
               align-items: center;
               justify-content: center;
               padding: 0 12px;
+              flex: 0 0 auto;
             }
 
             #rag-scroll-top,

@@ -49,6 +49,11 @@ class AnnotationMatchesEvent(BaseModel):
     matches: List[Dict[str, Any]]
 
 
+class AnnotationConcurrencyEvent(BaseModel):
+    type: Literal["annotationConcurrency"] = "annotationConcurrency"
+    activeRequests: int = Field(ge=0)
+
+
 class ErrorEvent(BaseModel):
     type: Literal["error"] = "error"
     message: str
@@ -58,6 +63,7 @@ AnnotationNDJSONEvent = Annotated[
     Union[
         AnnotationUpdateProgressEvent,
         AnnotationMatchesEvent,
+        AnnotationConcurrencyEvent,
         AnnotationDoneEvent,
         ErrorEvent,
     ],

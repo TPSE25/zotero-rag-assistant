@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import os
 import tempfile
@@ -12,6 +13,7 @@ from ollama import AsyncClient
 from core.clients import create_ollama_client
 from core.settings import ANSWER_MODEL
 from features.annotations.schemas import (
+    AnnotationConcurrencyEvent,
     AnnotationDoneEvent,
     AnnotationMatchesEvent,
     AnnotationUpdateProgressEvent,
@@ -27,6 +29,43 @@ router = APIRouter(tags=["annotations"])
 
 AnnotationProgressCb = Callable[[Dict[str, Any]], Awaitable[None]]
 AnnotationMatchesCb = Callable[[List[Dict[str, Any]]], Awaitable[None]]
+
+
+class _AnnotationConcurrencyTracker:
+    def __init__(self) -> None:
+        self._active_requests = 0
+        self._subscribers: set[asyncio.Queue[int]] = set()
+        self._lock = asyncio.Lock()
+
+    async def subscribe(self) -> asyncio.Queue[int]:
+        queue: asyncio.Queue[int] = asyncio.Queue()
+        async with self._lock:
+            self._subscribers.add(queue)
+            current = self._active_requests
+        await queue.put(current)
+        return queue
+
+    async def unsubscribe(self, queue: asyncio.Queue[int]) -> None:
+        async with self._lock:
+            self._subscribers.discard(queue)
+
+    async def increment(self) -> None:
+        await self._change_active_requests(1)
+
+    async def decrement(self) -> None:
+        await self._change_active_requests(-1)
+
+    async def _change_active_requests(self, delta: int) -> None:
+        async with self._lock:
+            self._active_requests = max(0, self._active_requests + delta)
+            current = self._active_requests
+            subscribers = list(self._subscribers)
+
+        for subscriber in subscribers:
+            await subscriber.put(current)
+
+
+ANNOTATION_CONCURRENCY_TRACKER = _AnnotationConcurrencyTracker()
 
 
 @router.post("/api/annotations", response_model=None)
@@ -105,6 +144,7 @@ async def annotations(
 
     async def gen() -> AsyncIterator[str]:
         queue: asyncio.Queue[str | None] = asyncio.Queue()
+        concurrency_queue = await ANNOTATION_CONCURRENCY_TRACKER.subscribe()
 
         async def progress_cb(payload: Dict[str, Any]) -> None:
             yield_event = AnnotationUpdateProgressEvent(
@@ -124,8 +164,17 @@ async def annotations(
             event = AnnotationMatchesEvent(matches=[_to_rag_match(m).model_dump() for m in partial])
             await queue.put(ndjson_annotation(event))
 
+        async def concurrency_worker() -> None:
+            while True:
+                active_requests = await concurrency_queue.get()
+                event = AnnotationConcurrencyEvent(activeRequests=active_requests)
+                await queue.put(ndjson_annotation(event))
+
         async def worker() -> None:
+            is_counted = False
             try:
+                await ANNOTATION_CONCURRENCY_TRACKER.increment()
+                is_counted = True
                 if tmp_path is None:
                     raise RuntimeError("Temporary PDF path is missing")
                 await _compute(pdf_path=tmp_path, progress_cb=progress_cb, matches_cb=matches_cb)
@@ -133,11 +182,14 @@ async def annotations(
                 logging.error(f"Error in annotations stream: {e}")
                 await queue.put(ndjson_annotation(ErrorEvent(message=str(e))))
             finally:
+                if is_counted:
+                    await ANNOTATION_CONCURRENCY_TRACKER.decrement()
                 if tmp_path and os.path.exists(tmp_path):
                     os.remove(tmp_path)
                 await queue.put(ndjson_annotation(AnnotationDoneEvent()))
                 await queue.put(None)
 
+        concurrency_task = asyncio.create_task(concurrency_worker())
         task = asyncio.create_task(worker())
         try:
             while True:
@@ -148,6 +200,11 @@ async def annotations(
         finally:
             if not task.done():
                 task.cancel()
+            if not concurrency_task.done():
+                concurrency_task.cancel()
+            await ANNOTATION_CONCURRENCY_TRACKER.unsubscribe(concurrency_queue)
+            with contextlib.suppress(asyncio.CancelledError):
+                await concurrency_task
 
     return StreamingResponse(
         gen(),

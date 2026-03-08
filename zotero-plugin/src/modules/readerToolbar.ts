@@ -415,27 +415,28 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
       if (controller && !controller.signal.aborted) controller.abort();
     };
 
+    let activeRequests: number | null = null;
+    let baseStatus = "Working…";
+    const renderStatus = () => {
+      if (!statusEl) return;
+      if (typeof activeRequests === "number") {
+        statusEl.textContent = `${baseStatus} • Active requests: ${activeRequests}`;
+      } else {
+        statusEl.textContent = baseStatus;
+      }
+    };
+    const setBaseStatus = (nextBaseStatus: string) => {
+      baseStatus = nextBaseStatus;
+      renderStatus();
+    };
+    const clearActiveRequests = () => {
+      activeRequests = null;
+      renderStatus();
+    };
+
     try {
       executeBtn.disabled = true;
       saveBtn.disabled = true;
-      let activeRequests: number | null = null;
-      let baseStatus = "Working…";
-      const renderStatus = () => {
-        if (!statusEl) return;
-        if (typeof activeRequests === "number") {
-          statusEl.textContent = `${baseStatus} • Active requests: ${activeRequests}`;
-        } else {
-          statusEl.textContent = baseStatus;
-        }
-      };
-      const setBaseStatus = (nextBaseStatus: string) => {
-        baseStatus = nextBaseStatus;
-        renderStatus();
-      };
-      const clearActiveRequests = () => {
-        activeRequests = null;
-        renderStatus();
-      };
       renderStatus();
 
       readUiIntoConfig(popup);

@@ -47,6 +47,10 @@ export type RagPdfMatch = {
   text?: string | null;
 };
 
+export type RagAnalyzePdfResponse = {
+  matches: RagPdfMatch[];
+};
+
 export type AnnotationProgressEvent = {
   type: "updateProgress";
   stage: string;
@@ -127,14 +131,18 @@ export class RagClient {
     signal?: AbortSignal,
     onProgress?: (event: AnnotationProgressEvent) => void,
     onMatches?: (matches: RagPdfMatch[]) => void,
-  ): Promise<void> {
+  ): Promise<RagAnalyzePdfResponse> {
     const allMatches: RagPdfMatch[] = [];
     for await (const msg of this.analyzePdfStream(pdf, cfg, signal)) {
       if (msg.type === "error") {
         throw new Error(msg.message || "Annotation stream failed");
       }
+      if (msg.type === "updateProgress" && onProgress) {
+        onProgress(msg);
+      }
       if (msg.type === "annotationMatches") {
         allMatches.push(...msg.matches);
+        if (onMatches) onMatches(msg.matches);
       }
     }
     return { matches: allMatches };

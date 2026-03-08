@@ -16,6 +16,8 @@ from features.prompts.store import render_prompt
 
 logger = logging.getLogger(__name__)
 
+MAX_OLLAMA_PARALLEL_CALLS = 4
+
 
 class RuleLike(Protocol):
     id: str
@@ -120,6 +122,7 @@ async def process_annotations(
 
     seen_spans: set[tuple[str, int, int]] = set()
     final_matches: List[dict[str, Any]] = []
+    ollama_chat_semaphore = asyncio.Semaphore(MAX_OLLAMA_PARALLEL_CALLS)
 
     async def _run_chunk(
         chunk: Chunk,
@@ -139,6 +142,7 @@ async def process_annotations(
             rules,
             answer_model,
             ollama_client,
+            ollama_chat_semaphore,
             debug_events,
             progress_callback=progress_callback,
             chunk_number=chunk_number,
@@ -290,6 +294,7 @@ async def _process_chunk(
         rules: Sequence[RuleLike],
         model: str,
         client: AsyncClient,
+        ollama_chat_semaphore: asyncio.Semaphore,
         debug_events: Optional[List[dict[str, Any]]] = None,
         progress_callback: Optional[ProgressCallback] = None,
         chunk_number: Optional[int] = None,
@@ -303,6 +308,7 @@ async def _process_chunk(
         rules,
         model,
         client,
+        ollama_chat_semaphore,
         debug_events
     )
 
@@ -358,6 +364,7 @@ async def _process_chunk(
                 candidate_tokens=candidate_tokens,
                 model=model,
                 client=client,
+                ollama_chat_semaphore=ollama_chat_semaphore,
                 chunk_start_index=chunk.start_index,
                 debug_events=debug_events
             )
@@ -391,6 +398,7 @@ async def _llm_find_relevant_sentences(
         rules: Sequence[RuleLike],
         model: str,
         client: AsyncClient,
+        ollama_chat_semaphore: asyncio.Semaphore,
         debug_events: Optional[List[dict[str, Any]]] = None,
 ) -> List[CoarseMatchResult]:
     rule_descriptions = "\n".join([f'- ID "{r.id}": {r.termsRaw}' for r in rules])
@@ -414,7 +422,8 @@ async def _llm_find_relevant_sentences(
     parsed_payload: Optional[dict[str, Any]] = None
     error_text: Optional[str] = None
     try:
-        response = await client.chat(**request_payload)
+        async with ollama_chat_semaphore:
+            response = await client.chat(**request_payload)
         raw = response["message"]["content"]
         data = _parse_json_from_llm(raw)
         parsed = LLMCoarseResponse.model_validate(data)
@@ -445,6 +454,7 @@ async def _llm_refine_span_boundaries(
         candidate_tokens: List[Token],
         model: str,
         client: AsyncClient,
+        ollama_chat_semaphore: asyncio.Semaphore,
         chunk_start_index: int,
         debug_events: Optional[List[dict[str, Any]]] = None,
 ) -> Optional[List[LLMBoundarySpan]]:
@@ -474,7 +484,8 @@ async def _llm_refine_span_boundaries(
     parsed_payload: Optional[dict[str, Any]] = None
     error_text: Optional[str] = None
     try:
-        response = await client.chat(**request_payload)
+        async with ollama_chat_semaphore:
+            response = await client.chat(**request_payload)
         raw = response["message"]["content"]
         data = _parse_json_from_llm(raw)
         parsed = LLMBoundaryResponse.model_validate(data)

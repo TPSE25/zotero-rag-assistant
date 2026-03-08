@@ -23,9 +23,6 @@ class PageData(TypedDict):
     words: list[WordData]
 
 
-
-
-
 class TextPlaceRecognitionPDF:
     def __init__(self, path: str) -> None:
         self.pdf_path: str = path

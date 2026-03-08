@@ -1,5 +1,5 @@
 import randomString = Zotero.randomString;
-import { RagConfig } from "./ragClient";
+import { RagConfig,RagPdfMatch} from "./ragClient";
 import { getString } from "../utils/locale";
 
 type RagHighlightRule = {
@@ -427,16 +427,24 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
           .map((r) => ({ id: r.id, termsRaw: r.termsRaw })),
         pageRange: popupCfg.pageRange || undefined,
       };
-      const resp = await client.analyzePdf(
-        pdfBlob,
-        request,
-        controller?.signal,
-      );
-      const created = await createHighlightsFromAnalyzeResponse(
-        reader,
-        popupCfg,
-        resp,
-      );
+  
+  const allMatches: RagPdfMatch[] = [];
+await client.analyzePdf(
+  pdfBlob,
+  request,
+  controller?.signal,
+  (progress) => {
+    executeBtn.textContent = progress.stage ?? "Working…";
+  },
+  (matches) => {
+    allMatches.push(...matches);
+  },
+);
+const created = await createHighlightsFromAnalyzeResponse(
+  reader,
+  popupCfg,
+  { matches: allMatches },
+);
       reader._iframeWindow?.console?.log?.(
         `RAG: created ${created} annotations`,
       );

@@ -46,8 +46,16 @@ export type RagPdfMatch = {
   rects: number[][];
 };
 
-export type RagAnalyzePdfResponse = {
-  matches: RagPdfMatch[];
+export type AnnotationProgressEvent = {
+  type: "updateProgress";
+  stage: string;
+  sent?: number;
+  chunk?: number;
+  marker?: number;
+  markerTotal?: number;
+  markerId?: string;
+  completed?: number;
+  total?: number;
 };
 
 export class RagClient {
@@ -61,14 +69,12 @@ export class RagClient {
   ): AsyncGenerator<QueryStreamMsg> {
     const url = `${this.baseUrl}/api/query`;
     const body: QueryIn = { prompt };
-
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal,
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`RAG API error (${response.status}): ${errorText}`);
@@ -76,28 +82,22 @@ export class RagClient {
     if (!response.body) {
       throw new Error("Streaming not supported: response.body is null");
     }
-
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
-
     let buf = "";
     while (true) {
       // @ts-expect-error zotero/gecko types: getReader() ends up as BYOB
       const { value, done } = await reader.read();
       if (done) break;
-
       buf += decoder.decode(value, { stream: true });
-
       const lines = buf.split("\n");
       buf = lines.pop() ?? "";
-
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         yield JSON.parse(trimmed) as QueryStreamMsg;
       }
     }
-
     const tail = buf.trim();
     if (tail) yield JSON.parse(tail) as QueryStreamMsg;
   }
@@ -106,10 +106,11 @@ export class RagClient {
     pdf: string,
     cfg: RagConfig,
     signal?: AbortSignal,
-  ): Promise<RagAnalyzePdfResponse> {
+    onProgress?: (event: AnnotationProgressEvent) => void,
+    onMatches?: (matches: RagPdfMatch[]) => void,
+  ): Promise<void> {
     const win = Zotero.getMainWindow();
     const url = `${this.baseUrl}/api/annotations`;
-
     const fd = new win.FormData();
     const u8 = new win.Uint8Array(pdf.length);
     for (let i = 0; i < pdf.length; i++) {
@@ -122,19 +123,46 @@ export class RagClient {
     );
     fd.append("config", JSON.stringify(cfg));
 
-    const res = await fetch(url, {
-      method: "POST",
-      body: fd,
-      signal,
-    });
-
+    const res = await fetch(url, { method: "POST", body: fd, signal });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(
         `RAG analyzePdf failed: HTTP ${res.status} ${res.statusText} ${body}`,
       );
     }
-    return (await res.json()) as unknown as RagAnalyzePdfResponse;
+    if (!res.body) {
+      throw new Error("Streaming not supported: response.body is null");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+
+    while (true) {
+      // @ts-expect-error zotero/gecko types: getReader() ends up as BYOB
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const event = JSON.parse(trimmed);
+        if (event.type === "updateProgress") onProgress?.(event);
+        if (event.type === "annotationMatches") onMatches?.(event.matches);
+        if (event.type === "error") throw new Error(event.message);
+        if (event.type === "done") return;
+      }
+    }
+
+    const tail = buf.trim();
+    if (tail) {
+      const event = JSON.parse(tail);
+      if (event.type === "updateProgress") onProgress?.(event);
+      if (event.type === "annotationMatches") onMatches?.(event.matches);
+      if (event.type === "error") throw new Error(event.message);
+    }
   }
 
   public async generateChatTitle(
@@ -147,12 +175,10 @@ export class RagClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
     if (!res.ok) {
       const errorText = await res.text().catch(() => "");
       throw new Error(`RAG title API error (${res.status}): ${errorText}`);
     }
-
     const out = (await res.json()) as unknown as ChatTitleOut;
     const title = (out?.title ?? "").trim();
     return title || null;

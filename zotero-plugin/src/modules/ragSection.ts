@@ -1,8 +1,208 @@
-import { ChatTitleMessage, RagClient } from "./ragClient";
+import { ChatTitleMessage, RagClient, Source } from "./ragClient";
 import { getString } from "../utils/locale";
 import { ChatDB, ChatMessage, ChatSession } from "./ragStorage";
 import { showZoteroSource } from "./openSource";
 import { assert } from "../utils/assert";
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const escapeHtmlAttribute = (value: string): string =>
+  escapeHtml(value).replace(/`/g, "&#96;");
+
+const safeHref = (rawHref: string): string | null => {
+  const href = rawHref.trim();
+  if (!href) return null;
+  if (href.startsWith("/")) return href;
+
+  try {
+    const parsed = new URL(href);
+    if (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "mailto:" ||
+      parsed.protocol === "zotero:"
+    ) {
+      return href;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+const renderInlineMarkdown = (
+  raw: string,
+  sourceById: Map<string, Source>,
+): string => {
+  const tokenToHtml = new Map<string, string>();
+  let counter = 0;
+
+  const addToken = (html: string): string => {
+    const token = `@@MDTOKINLINE${counter++}@@`;
+    tokenToHtml.set(token, html);
+    return token;
+  };
+
+  let text = raw;
+
+  text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label, href) => {
+    const safe = safeHref(href);
+    if (!safe) return addToken(`${escapeHtml(label)} (${escapeHtml(href)})`);
+    return addToken(
+      `<a href="${escapeHtmlAttribute(safe)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`,
+    );
+  });
+
+  text = text.replace(/`([^`\n]+)`/g, (_m, code) =>
+    addToken(`<code>${escapeHtml(code)}</code>`),
+  );
+
+  text = text.replace(/\[(S\d+)\]/gi, (_m, sourceId) => {
+    const normalizedId = String(sourceId).toUpperCase();
+    const source = sourceById.get(normalizedId);
+    if (!source) return `[${sourceId}]`;
+    const tooltip = `${source.id}: ${source.filename}`;
+    return addToken(
+      `<a href="#" class="rag-inline-source" data-source-id="${escapeHtmlAttribute(source.id)}" title="${escapeHtmlAttribute(tooltip)}">[${escapeHtml(source.id)}]</a>`,
+    );
+  });
+
+  let html = escapeHtml(text);
+  html = html
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+    .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+    .replace(/_([^_\n]+)_/g, "<em>$1</em>");
+
+  for (const [token, tokenHtml] of tokenToHtml.entries()) {
+    html = html.replaceAll(token, tokenHtml);
+  }
+
+  return html;
+};
+
+const renderAssistantMarkdown = (
+  rawContent: string,
+  sources: Source[] = [],
+): string => {
+  const fencedBlocks = new Map<string, string>();
+  let fenceCounter = 0;
+  const normalized = rawContent.replace(/\r\n?/g, "\n");
+
+  const withFenceTokens = normalized.replace(
+    /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g,
+    (_m, lang, code) => {
+      const safeToken = `@@MDTOKBLOCK${fenceCounter++}@@`;
+      const classAttr = lang
+        ? ` class="language-${escapeHtmlAttribute(String(lang))}"`
+        : "";
+      const cleanCode = String(code).replace(/\n$/, "");
+      fencedBlocks.set(
+        safeToken,
+        `<pre class="rag-code-block"><code${classAttr}>${escapeHtml(cleanCode)}</code></pre>`,
+      );
+      return safeToken;
+    },
+  );
+
+  const lines = withFenceTokens.split("\n");
+  const out: string[] = [];
+  let inUl = false;
+  let inOl = false;
+  const sourceById = new Map<string, Source>();
+  for (const source of sources) {
+    sourceById.set(source.id.toUpperCase(), source);
+  }
+
+  const renderWithSourceLinks = (text: string): string =>
+    renderInlineMarkdown(text, sourceById);
+
+  const closeLists = () => {
+    if (inUl) {
+      out.push("</ul>");
+      inUl = false;
+    }
+    if (inOl) {
+      out.push("</ol>");
+      inOl = false;
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      closeLists();
+      continue;
+    }
+
+    if (fencedBlocks.has(trimmed)) {
+      closeLists();
+      out.push(trimmed);
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      closeLists();
+      const level = heading[1].length;
+      out.push(`<h${level}>${renderWithSourceLinks(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      closeLists();
+      out.push(`<blockquote>${renderWithSourceLinks(quote[1])}</blockquote>`);
+      continue;
+    }
+
+    const ul = trimmed.match(/^[-*]\s+(.+)$/);
+    if (ul) {
+      if (inOl) {
+        out.push("</ol>");
+        inOl = false;
+      }
+      if (!inUl) {
+        out.push("<ul>");
+        inUl = true;
+      }
+      out.push(`<li>${renderWithSourceLinks(ul[1])}</li>`);
+      continue;
+    }
+
+    const ol = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (ol) {
+      if (inUl) {
+        out.push("</ul>");
+        inUl = false;
+      }
+      if (!inOl) {
+        out.push("<ol>");
+        inOl = true;
+      }
+      out.push(`<li>${renderWithSourceLinks(ol[1])}</li>`);
+      continue;
+    }
+
+    closeLists();
+    out.push(`<p>${renderWithSourceLinks(trimmed)}</p>`);
+  }
+
+  closeLists();
+
+  let html = out.join("\n");
+  for (const [token, tokenHtml] of fencedBlocks.entries()) {
+    html = html.replaceAll(token, tokenHtml);
+  }
+  return html;
+};
 
 export class RagSection {
   private static ragClient = new RagClient();
@@ -135,7 +335,7 @@ export class RagSection {
               border: 1px solid GrayText;
               border-radius: 10px;
               padding: 8px;
-              white-space: pre-wrap;
+              white-space: normal;
         
               background-color: Canvas;
               color: CanvasText;
@@ -148,8 +348,65 @@ export class RagSection {
         
             .rag-bubble-text {
               display: block;
-              white-space: pre-wrap;
               user-select: text;
+            }
+
+            .rag-bubble-text.is-plain {
+              white-space: pre-wrap;
+            }
+
+            .rag-bubble-text p {
+              margin: 0 0 0.5em 0;
+            }
+            .rag-bubble-text p:last-child {
+              margin-bottom: 0;
+            }
+            .rag-bubble-text ul,
+            .rag-bubble-text ol {
+              margin: 0.25em 0 0.5em 1.25em;
+              padding: 0;
+            }
+            .rag-bubble-text li {
+              margin: 0.15em 0;
+            }
+            .rag-bubble-text h1,
+            .rag-bubble-text h2,
+            .rag-bubble-text h3,
+            .rag-bubble-text h4,
+            .rag-bubble-text h5,
+            .rag-bubble-text h6 {
+              margin: 0.2em 0 0.35em 0;
+              font-size: 1em;
+            }
+            .rag-bubble-text blockquote {
+              margin: 0.25em 0;
+              padding-left: 0.6em;
+              border-left: 2px solid GrayText;
+              opacity: 0.9;
+            }
+            .rag-bubble-text code {
+              font-family: monospace;
+              background: color-mix(in srgb, CanvasText 8%, Canvas);
+              padding: 0.05em 0.25em;
+              border-radius: 4px;
+            }
+            .rag-bubble-text .rag-code-block {
+              margin: 0.25em 0;
+              padding: 0.55em;
+              border: 1px solid GrayText;
+              border-radius: 6px;
+              overflow-x: auto;
+              background: color-mix(in srgb, CanvasText 6%, Canvas);
+            }
+            .rag-bubble-text .rag-code-block code {
+              background: transparent;
+              padding: 0;
+            }
+            .rag-bubble-text a {
+              text-decoration: underline;
+            }
+            .rag-bubble-text .rag-inline-source {
+              cursor: pointer;
             }
         
             .rag-sources {
@@ -301,6 +558,24 @@ export class RagSection {
         )
           return;
 
+        const showSourceOpenError = (error: unknown, sourceLabel: string) => {
+          const details =
+            error instanceof Error ? `\n\nDetails: ${error.message}` : "";
+          const message =
+            `Could not open source ${sourceLabel}.\n\n` +
+            "Likely cause: this source belongs to a different Zotero account or library than the one currently open." +
+            details;
+          try {
+            if (typeof Zotero.alert === "function") {
+              Zotero.alert(win, "Source unavailable", message);
+            } else {
+              win.alert(message);
+            }
+          } catch (dialogError: any) {
+            Zotero.logError?.(dialogError);
+          }
+        };
+
         let sessions: ChatSession[] = await this.chatDB.listSessions();
         let renamingSessionId: string | null = null;
         let currentSessionId: string | null = sessions[0]?.id ?? null;
@@ -439,12 +714,17 @@ export class RagSection {
 
           const msgs = await this.chatDB!.listMessages(currentSessionId);
           messagesEl.innerHTML = "";
+          messageSources.clear();
 
           msgs.forEach((m) => appendMessageNode(m));
           scrollToBottom();
         };
 
+        const messageSources = new Map<string, Source[]>();
+
         const appendMessageNode = (m: ChatMessage) => {
+          messageSources.set(m.id, m.sources ?? []);
+
           const row = ztoolkit.UI.createElement(body.ownerDocument!, "div");
           row.dataset.msgId = m.id;
           row.classList.add("rag-msg-row");
@@ -456,7 +736,12 @@ export class RagSection {
 
           const text = ztoolkit.UI.createElement(body.ownerDocument!, "div");
           text.classList.add("rag-bubble-text");
-          text.textContent = m.content;
+          if (m.role === "assistant") {
+            text.innerHTML = renderAssistantMarkdown(m.content, m.sources ?? []);
+          } else {
+            text.classList.add("is-plain");
+            text.textContent = m.content;
+          }
           bubble.appendChild(text);
 
           if (m.role === "assistant" && m.sources && m.sources.length) {
@@ -487,6 +772,7 @@ export class RagSection {
                   await showZoteroSource(source.zotero_id, false);
                 } catch (e: any) {
                   Zotero.logError?.(e);
+                  showSourceOpenError(e, source.id);
                 }
               };
               line.ondblclick = async () => {
@@ -494,6 +780,7 @@ export class RagSection {
                   await showZoteroSource(source.zotero_id, true);
                 } catch (e: any) {
                   Zotero.logError?.(e);
+                  showSourceOpenError(e, source.id);
                 }
               };
               line.textContent = `${source.id}: ${source.filename}`;
@@ -533,6 +820,56 @@ export class RagSection {
         messagesEl.addEventListener("touchmove", () => {
           autoScrollEnabled = false;
         });
+        messagesEl.addEventListener("click", async (event) => {
+          const target = event.target as HTMLElement | null;
+          const sourceAnchor = target?.closest(
+            ".rag-inline-source",
+          ) as HTMLElement | null;
+          if (!sourceAnchor) return;
+
+          event.preventDefault();
+
+          const sourceId = sourceAnchor.getAttribute("data-source-id");
+          const row = sourceAnchor.closest("[data-msg-id]") as HTMLElement | null;
+          const msgId = row?.dataset.msgId;
+          if (!sourceId || !msgId) return;
+
+          const source = (messageSources.get(msgId) ?? []).find(
+            (s) => s.id === sourceId,
+          );
+          if (!source) return;
+          try {
+            await showZoteroSource(source.zotero_id, false);
+          } catch (e: any) {
+            Zotero.logError?.(e);
+            showSourceOpenError(e, source.id);
+          }
+        });
+        messagesEl.addEventListener("dblclick", async (event) => {
+          const target = event.target as HTMLElement | null;
+          const sourceAnchor = target?.closest(
+            ".rag-inline-source",
+          ) as HTMLElement | null;
+          if (!sourceAnchor) return;
+
+          event.preventDefault();
+
+          const sourceId = sourceAnchor.getAttribute("data-source-id");
+          const row = sourceAnchor.closest("[data-msg-id]") as HTMLElement | null;
+          const msgId = row?.dataset.msgId;
+          if (!sourceId || !msgId) return;
+
+          const source = (messageSources.get(msgId) ?? []).find(
+            (s) => s.id === sourceId,
+          );
+          if (!source) return;
+          try {
+            await showZoteroSource(source.zotero_id, true);
+          } catch (e: any) {
+            Zotero.logError?.(e);
+            showSourceOpenError(e, source.id);
+          }
+        });
 
         const scrollToFirstMessage = () => {
           autoScrollEnabled = false;
@@ -558,14 +895,33 @@ export class RagSection {
           scrollToBottom();
         };
 
-        const setMessageText = (msgId: string, value: string) => {
+        const setMessageText = (
+          msgId: string,
+          value: string,
+          sources?: Source[],
+        ) => {
+          if (sources) {
+            messageSources.set(msgId, sources);
+          }
+          const effectiveSources = messageSources.get(msgId) ?? [];
+
           const row = messagesEl.querySelector(
             `[data-msg-id="${msgId}"]`,
           ) as HTMLElement | null;
           const textEl = row?.querySelector(
             ".rag-bubble-text",
           ) as HTMLElement | null;
-          if (textEl) textEl.textContent = value;
+          if (textEl) {
+            if (row?.classList.contains("is-assistant")) {
+              textEl.innerHTML = renderAssistantMarkdown(
+                value,
+                effectiveSources,
+              );
+            } else {
+              textEl.classList.add("is-plain");
+              textEl.textContent = value;
+            }
+          }
         };
 
         const ensureSession = async (): Promise<string> => {
@@ -684,6 +1040,7 @@ export class RagSection {
 
               if (msg.type === "setSources") {
                 sources = msg.sources;
+                setMessageText(pending.id, answer, sources);
               }
 
               if (msg.type === "token") {
@@ -692,7 +1049,7 @@ export class RagSection {
                   answer = "";
                 }
                 answer += msg.token;
-                setMessageText(pending.id, answer);
+                setMessageText(pending.id, answer, sources);
                 scrollToBottom();
               }
 

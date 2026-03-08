@@ -37,6 +37,28 @@ const safeHref = (rawHref: string): string | null => {
   return null;
 };
 
+const formatSourcePages = (pages?: number[]): string => {
+  if (!pages?.length) return "";
+  const sorted = [...new Set(pages)].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let start = sorted[0];
+  let prev = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const page = sorted[i];
+    if (page === prev + 1) {
+      prev = page;
+      continue;
+    }
+    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+    start = page;
+    prev = page;
+  }
+
+  ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+  return ` (pp. ${ranges.join(", ")})`;
+};
+
 const renderInlineMarkdown = (
   raw: string,
   sourceById: Map<string, Source>,
@@ -68,7 +90,7 @@ const renderInlineMarkdown = (
     const normalizedId = String(sourceId).toUpperCase();
     const source = sourceById.get(normalizedId);
     if (!source) return `[${sourceId}]`;
-    const tooltip = `${source.id}: ${source.filename}`;
+    const tooltip = `${source.id}: ${source.filename}${formatSourcePages(source.pages)}`;
     return addToken(
       `<a href="#" class="rag-inline-source" data-source-id="${escapeHtmlAttribute(source.id)}" title="${escapeHtmlAttribute(tooltip)}">[${escapeHtml(source.id)}]</a>`,
     );
@@ -811,7 +833,7 @@ export class RagSection {
                   showSourceOpenError(e, source.id);
                 }
               };
-              line.textContent = `${source.id}: ${source.filename}`;
+              line.textContent = `${source.id}: ${source.filename}${formatSourcePages(source.pages)}`;
               list.appendChild(line);
             }
 
@@ -1006,17 +1028,24 @@ export class RagSection {
 
         const collectAppendOnlySources = (messages: ChatMessage[]): Source[] => {
           const out: Source[] = [];
-          const seen = new Set<string>();
+          const seen = new Map<string, Source>();
           for (const message of messages) {
             for (const source of message.sources ?? []) {
               const key = `${source.zotero_id}\0${source.filename}`;
-              if (seen.has(key)) continue;
-              seen.add(key);
-              out.push({
+              const existing = seen.get(key);
+              if (existing) {
+                const merged = [...(existing.pages ?? []), ...(source.pages ?? [])];
+                existing.pages = [...new Set(merged)].sort((a, b) => a - b);
+                continue;
+              }
+              const next: Source = {
                 id: `S${out.length + 1}`,
                 filename: source.filename,
                 zotero_id: source.zotero_id,
-              });
+                pages: source.pages,
+              };
+              seen.set(key, next);
+              out.push(next);
             }
           }
           return out;

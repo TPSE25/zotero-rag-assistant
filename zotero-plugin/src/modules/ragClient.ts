@@ -24,6 +24,7 @@ export interface Source {
   id: string;
   filename: string;
   zotero_id: string;
+  pages?: number[];
 }
 
 export type QueryStreamMsg =

@@ -28,12 +28,15 @@ class Hit(BaseModel):
     filename: str
     zotero_id: str
     chunk_index: int
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
 
 
 class Source(BaseModel):
     id: str
     filename: str
     zotero_id: str
+    pages: Optional[List[int]] = None
 
 
 class QueryUpdateProgressEvent(BaseModel):

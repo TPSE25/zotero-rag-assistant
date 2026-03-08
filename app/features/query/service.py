@@ -15,19 +15,22 @@ def source_key(source: Source) -> tuple[str, str]:
 
 def normalize_sources(existing_sources: List[Source]) -> List[Source]:
     deduped: List[Source] = []
-    seen: set[tuple[str, str]] = set()
+    seen: Dict[tuple[str, str], Source] = {}
     for source in existing_sources:
         key = source_key(source)
+        pages = sorted(set(source.pages or [])) or None
         if key in seen:
+            merged_pages = sorted(set((seen[key].pages or []) + (pages or []))) or None
+            seen[key].pages = merged_pages
             continue
-        seen.add(key)
-        deduped.append(
-            Source(
-                id=f"S{len(deduped) + 1}",
-                filename=source.filename,
-                zotero_id=source.zotero_id,
-            )
+        normalized = Source(
+            id=f"S{len(deduped) + 1}",
+            filename=source.filename,
+            zotero_id=source.zotero_id,
+            pages=pages,
         )
+        seen[key] = normalized
+        deduped.append(normalized)
     return deduped
 
 
@@ -36,11 +39,17 @@ def _document_id(zotero_id: str, filename: str, idx: int) -> str:
 
 
 def create_hit(doc: str, metadata: Mapping[str, Any]) -> Hit:
+    raw_page_start = metadata.get("page_start")
+    raw_page_end = metadata.get("page_end")
+    page_start = int(raw_page_start) if isinstance(raw_page_start, (int, float)) else None
+    page_end = int(raw_page_end) if isinstance(raw_page_end, (int, float)) else None
     return Hit(
         text=doc,
         filename=cast(str, metadata["filename"]),
         zotero_id=cast(str, metadata["zotero_id"]),
         chunk_index=cast(int, metadata["chunk_index"]),
+        page_start=page_start,
+        page_end=page_end,
     )
 
 
@@ -99,13 +108,30 @@ def format_sources_by_file(
     key_to_id: Dict[tuple[str, str], str] = {
         source_key(s): s.id for s in sources
     }
+    key_to_source: Dict[tuple[str, str], Source] = {
+        source_key(s): s for s in sources
+    }
 
     for hit in hits:
         key = (hit.zotero_id, hit.filename)
         if key not in key_to_id:
             sid = f"S{len(sources) + 1}"
             key_to_id[key] = sid
-            sources.append(Source(id=sid, filename=hit.filename, zotero_id=hit.zotero_id))
+            source = Source(id=sid, filename=hit.filename, zotero_id=hit.zotero_id, pages=[])
+            sources.append(source)
+            key_to_source[key] = source
+
+        source = key_to_source[key]
+        existing_pages = set(source.pages or [])
+        if hit.page_start is not None and hit.page_end is not None:
+            start_page = min(hit.page_start, hit.page_end)
+            end_page = max(hit.page_start, hit.page_end)
+            existing_pages.update(range(start_page, end_page + 1))
+        elif hit.page_start is not None:
+            existing_pages.add(hit.page_start)
+        elif hit.page_end is not None:
+            existing_pages.add(hit.page_end)
+        source.pages = sorted(existing_pages) if existing_pages else None
         group_key = f"{key_to_id[key]}\0{hit.zotero_id}\0{hit.filename}"
         if group_key not in by_file:
             by_file[group_key] = (hit.zotero_id, [])
@@ -116,7 +142,15 @@ def format_sources_by_file(
     for group_key, (_zotero_id, excerpts) in by_file.items():
         sid, _key_zotero_id, filename = group_key.split("\0", 2)
         excerpts_formatted = [
-            f"(chunk {hit.chunk_index}) {hit.text.strip()}"
+            (
+                f"(pages {hit.page_start}-{hit.page_end}, chunk {hit.chunk_index}) {hit.text.strip()}"
+                if hit.page_start is not None and hit.page_end is not None and hit.page_start != hit.page_end
+                else (
+                    f"(page {hit.page_start or hit.page_end}, chunk {hit.chunk_index}) {hit.text.strip()}"
+                    if (hit.page_start is not None or hit.page_end is not None)
+                    else f"(chunk {hit.chunk_index}) {hit.text.strip()}"
+                )
+            )
             for hit in sorted(excerpts, key=lambda x: x.chunk_index)
         ]
 

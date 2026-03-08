@@ -54,18 +54,6 @@ export type RagAnalyzePdfResponse = {
   matches: RagPdfMatch[];
 };
 
-export type AnnotationProgressEvent = {
-  type: "updateProgress";
-  stage: string;
-  sent?: number;
-  chunk?: number;
-  marker?: number;
-  markerTotal?: number;
-  markerId?: string;
-  completed?: number;
-  total?: number;
-};
-
 export type AnnotationStreamMsg =
   | {
       type: "updateProgress";
@@ -128,29 +116,6 @@ export class RagClient {
     }
     const tail = buf.trim();
     if (tail) yield JSON.parse(tail) as QueryStreamMsg;
-  }
-
-  public async analyzePdf(
-    pdf: string,
-    cfg: RagConfig,
-    signal?: AbortSignal,
-    onProgress?: (event: AnnotationProgressEvent) => void,
-    onMatches?: (matches: RagPdfMatch[]) => void,
-  ): Promise<RagAnalyzePdfResponse> {
-    const allMatches: RagPdfMatch[] = [];
-    for await (const msg of this.analyzePdfStream(pdf, cfg, signal)) {
-      if (msg.type === "error") {
-        throw new Error(msg.message || "Annotation stream failed");
-      }
-      if (msg.type === "updateProgress" && onProgress) {
-        onProgress(msg);
-      }
-      if (msg.type === "annotationMatches") {
-        allMatches.push(...msg.matches);
-        if (onMatches) onMatches(msg.matches);
-      }
-    }
-    return { matches: allMatches };
   }
 
   public async *analyzePdfStream(

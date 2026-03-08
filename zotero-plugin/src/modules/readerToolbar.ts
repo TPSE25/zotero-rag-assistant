@@ -1,5 +1,5 @@
 import randomString = Zotero.randomString;
-import { RagConfig,RagPdfMatch} from "./ragClient";
+import { RagConfig } from "./ragClient";
 import { getString } from "../utils/locale";
 
 type RagHighlightRule = {
@@ -205,6 +205,12 @@ function ensureRagStyles(doc: Document) {
         margin-top: 12px;
       }
 
+      .rag-status {
+        margin-top: 8px;
+        min-height: 1.2em;
+        opacity: 0.9;
+      }
+
       .rag-page-range {
         margin-top: 10px;
       }
@@ -321,6 +327,7 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
         <input id="rag-page-range" type="text" placeholder="e.g. 3 or 3-7" />
       </div>
 
+      <div id="rag-status" class="rag-status" aria-live="polite"></div>
       <div class="rag-actions">
         <button type="button" class="rag-btn" id="rag-add-rule">+ Add rule</button>
 
@@ -398,7 +405,7 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
     const executeBtn = popup.querySelector<HTMLButtonElement>("#rag-execute")!;
     const stopBtn = popup.querySelector<HTMLButtonElement>("#rag-stop")!;
     const saveBtn = popup.querySelector<HTMLButtonElement>("#rag-save")!;
-    const oldLabel = executeBtn.textContent ?? "Execute";
+    const statusEl = popup.querySelector<HTMLElement>("#rag-status");
     const controller = createAbortControllerFromDoc(popup.ownerDocument!);
     activeExecuteAbortController = controller;
 
@@ -408,10 +415,29 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
       if (controller && !controller.signal.aborted) controller.abort();
     };
 
+    let activeRequests: number | null = null;
+    let baseStatus = "Working…";
+    const renderStatus = () => {
+      if (!statusEl) return;
+      if (typeof activeRequests === "number") {
+        statusEl.textContent = `${baseStatus} • Active requests: ${activeRequests}`;
+      } else {
+        statusEl.textContent = baseStatus;
+      }
+    };
+    const setBaseStatus = (nextBaseStatus: string) => {
+      baseStatus = nextBaseStatus;
+      renderStatus();
+    };
+    const clearActiveRequests = () => {
+      activeRequests = null;
+      renderStatus();
+    };
+
     try {
       executeBtn.disabled = true;
       saveBtn.disabled = true;
-      executeBtn.textContent = "Working…";
+      renderStatus();
 
       readUiIntoConfig(popup);
       saveCfgToPrefs(popupCfg);
@@ -427,27 +453,96 @@ function ensurePopup(doc: Document, reader: any): HTMLDivElement {
           .map((r) => ({ id: r.id, termsRaw: r.termsRaw })),
         pageRange: popupCfg.pageRange || undefined,
       };
-  
-  const allMatches: RagPdfMatch[] = [];
-await client.analyzePdf(
-  pdfBlob,
-  request,
-  controller?.signal,
-  (progress) => {
-    executeBtn.textContent = progress.stage ?? "Working…";
-  },
-  (matches) => {
-    allMatches.push(...matches);
-  },
-);
-const created = await createHighlightsFromAnalyzeResponse(
-  reader,
-  popupCfg,
-  { matches: allMatches },
-);
+      let created = 0;
+      const seen = new Set<string>();
+
+      for await (const msg of client.analyzePdfStream(
+        pdfBlob,
+        request,
+        controller?.signal,
+      )) {
+        if (msg.type === "error") {
+          throw new Error(msg.message || "Annotation stream failed");
+        }
+
+        if (msg.type === "annotationConcurrency") {
+          activeRequests = msg.activeRequests;
+          renderStatus();
+          continue;
+        }
+
+        if (msg.type === "updateProgress") {
+          if (
+            msg.stage === "marker_progress" &&
+            typeof msg.chunk === "number" &&
+            typeof msg.total === "number" &&
+            msg.total > 0
+          ) {
+            if (
+              typeof msg.marker === "number" &&
+              typeof msg.markerTotal === "number" &&
+              msg.markerTotal > 0
+            ) {
+              setBaseStatus(
+                `Chunk ${msg.chunk}/${msg.total} • Marker ${msg.marker}/${msg.markerTotal}`,
+              );
+            } else {
+              setBaseStatus(
+                `Chunk ${msg.chunk}/${msg.total} • Processing markers…`,
+              );
+            }
+          } else if (
+            msg.stage === "chunk_started" &&
+            typeof msg.chunk === "number" &&
+            typeof msg.total === "number" &&
+            msg.total > 0
+          ) {
+            setBaseStatus(`Chunk ${msg.chunk}/${msg.total}`);
+          } else if (
+            msg.stage === "chunk_dispatched" &&
+            typeof msg.sent === "number" &&
+            typeof msg.total === "number" &&
+            msg.total > 0
+          ) {
+            setBaseStatus(`Sending chunks… (${msg.sent}/${msg.total})`);
+          } else if (
+            msg.stage === "chunk_processed" &&
+            typeof msg.completed === "number" &&
+            typeof msg.total === "number" &&
+            msg.total > 0
+          ) {
+            setBaseStatus(`Processed chunks… (${msg.completed}/${msg.total})`);
+          } else {
+            setBaseStatus(`Working… (${msg.stage})`);
+          }
+          continue;
+        }
+
+        if (msg.type === "annotationMatches" && msg.matches.length > 0) {
+          const unique = msg.matches.filter((m) => {
+            const key = `${m.id}|${m.pageIndex}|${JSON.stringify(m.rects)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          if (unique.length > 0) {
+            created += await createHighlightsFromAnalyzeResponse(reader, popupCfg, {
+              matches: unique,
+            });
+            setBaseStatus(`Working… (${created} highlighted)`);
+          }
+          continue;
+        }
+
+        if (msg.type === "done") {
+          break;
+        }
+      }
       reader._iframeWindow?.console?.log?.(
         `RAG: created ${created} annotations`,
       );
+      clearActiveRequests();
+      setBaseStatus(`Highlighted ${created} element${created === 1 ? "" : "s"}.`);
     } catch (e) {
       const maybeAbortError =
         !!e &&
@@ -456,10 +551,14 @@ const created = await createHighlightsFromAnalyzeResponse(
         (e as { name?: string }).name === "AbortError";
       if (maybeAbortError) {
         reader._iframeWindow?.console?.log?.("RAG: highlight execution stopped");
+        clearActiveRequests();
+        if (statusEl) statusEl.textContent = "Stopped.";
       } else {
         const msg = e instanceof Error ? e.message : String(e);
         Zotero.debug?.(`RAG execute failed: ${msg}`);
         reader._iframeWindow?.alert?.(`RAG failed: ${msg}`);
+        clearActiveRequests();
+        if (statusEl) statusEl.textContent = `Failed: ${msg}`;
       }
     } finally {
       if (activeExecuteAbortController === controller) {
@@ -469,7 +568,6 @@ const created = await createHighlightsFromAnalyzeResponse(
       stopBtn.onclick = null;
       executeBtn.disabled = false;
       saveBtn.disabled = false;
-      executeBtn.textContent = oldLabel;
     }
   });
 

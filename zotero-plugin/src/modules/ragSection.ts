@@ -511,17 +511,31 @@ export class RagSection {
 
         let autoScrollEnabled = true;
 
+        const getScrollContainer = (): HTMLElement => {
+          let el: HTMLElement | null = messagesEl.parentElement as HTMLElement | null;
+          while (el && el !== doc.documentElement) {
+            const style = win!.getComputedStyle(el);
+            if (style) {
+              const overflow = style.overflowY;
+              if (
+                (overflow === "auto" || overflow === "scroll") &&
+                el.scrollHeight > el.clientHeight
+              ) {
+                return el;
+              }
+            }
+            el = el.parentElement as HTMLElement | null;
+          }
+          const side = doc.getElementById("zotero-view-item") as HTMLElement | null;
+          if (side) return side;
+          throw new Error("No scrollable container found");
+        };
+
         const scrollToBottom = () => {
           if (!autoScrollEnabled) return;
-          const side = doc.getElementById(
-            "zotero-view-item",
-          ) as HTMLElement | null;
-          if (!side) throw new Error("No #zotero-view-item found");
-
           win.requestAnimationFrame(() => {
             win.requestAnimationFrame(() => {
-              /* for some reason the scrollHeight will not reset when we remove chat elements.
-                 so just updating it will recover from the illegal position */
+              const side = getScrollContainer();
               side.scrollTop = side.scrollHeight + 100;
             });
           });
@@ -535,23 +549,16 @@ export class RagSection {
         });
 
         const scrollToFirstMessage = () => {
-          autoScrollEnabled = false;
+        autoScrollEnabled = false;
+        const side = getScrollContainer();
+        const navTop = body.querySelector("#rag-nav-top") as HTMLElement | null;
+        if (!navTop) return;
 
-          const side = doc.getElementById("zotero-view-item") as HTMLElement | null;
-          if (!side) throw new Error("No #zotero-view-item found");
-
-          const navTop = body.querySelector("#rag-nav-top") as HTMLElement | null;
-          if (!navTop) return;
-
-          // Position of navTop relative to the scroll container
-          const sideRect = side.getBoundingClientRect();
-          const navRect = navTop.getBoundingClientRect();
-
-          // Current scrollTop + delta between nav and container top
-          const targetTop = side.scrollTop + (navRect.top - sideRect.top);
-
-          side.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
-        };
+        const sideRect = side.getBoundingClientRect();
+        const navRect = navTop.getBoundingClientRect();
+        const targetTop = side.scrollTop + (navRect.top - sideRect.top);
+        side.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+      };
 
         const scrollToLastMessage = () => {
           autoScrollEnabled = true;

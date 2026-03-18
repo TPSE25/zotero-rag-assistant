@@ -7,7 +7,7 @@ npm run build
 ```
 You can then find the build file in zotero-plugin/.scaffold/build/rag-assistant.xpi 
 ### VPN
-In order to be able to use the plugin, you must be approved by the administrators to use the VPN. Consult the installation guide for more information.
+In order to be able to use the plugin, you must be approved by the administrators to use the VPN. Consult the [installation guide](Installationsguide___Zotero_Plugin.pdf) for more information.
 ### Install the plugin in Zotero
 - Navigate to tools/plugins in the menu bar of Zotero
 - Click the gear icon, then click the option "install plugin from file..." and select the build file

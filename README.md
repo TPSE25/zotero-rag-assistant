@@ -1,3 +1,10 @@
+# zotero-rag-assistant
+`zotero-rag-assistant` is a Zotero plugin + backend stack for RAG chat over your library and AI-assisted PDF annotations.
+
+## Guides
+- Plugin install guide: [Installationsguide___Zotero_Plugin.pdf](Installationsguide___Zotero_Plugin.pdf)
+- Benchmark input PDF: [benchmark/Project_3_Offloading.pdf](benchmark/Project_3_Offloading.pdf)
+
 ## Install plugin
 ### Create build file
 ```bash

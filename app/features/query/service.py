@@ -4,7 +4,12 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 from chromadb.api.types import GetResult, QueryResult
 
 from core.clients import create_ollama_client, get_or_create_chroma_collection
-from core.settings import EMBEDDING_MODEL
+from core.settings import (
+    EMBEDDING_MODEL,
+    QUERY_NEIGHBOR_DISTANCE_THRESHOLD,
+    QUERY_NEIGHBOR_TOP_N,
+    QUERY_N_RESULTS,
+)
 from core.types import Embedding
 from features.query.schemas import Hit, Source
 
@@ -64,10 +69,28 @@ def _get_neighbor_ids(hits: List[Hit]) -> set[str]:
     return neighbor_ids
 
 
+def _neighbor_seed_hits(
+    hits: List[Hit],
+    distances: list[float] | None,
+    neighbor_top_n: int,
+    neighbor_distance_threshold: float | None,
+) -> List[Hit]:
+    capped_hits = hits[: max(neighbor_top_n, 0)]
+    if neighbor_distance_threshold is None or distances is None:
+        return capped_hits
+    capped_distances = distances[: len(capped_hits)]
+    return [
+        hit
+        for hit, distance in zip(capped_hits, capped_distances)
+        if distance <= neighbor_distance_threshold
+    ]
+
+
 async def get_query_hits(
     prompt: str,
-    n_results: int = 12,
-    neighbor_top_n: int = 5,
+    n_results: int = QUERY_N_RESULTS,
+    neighbor_top_n: int = QUERY_NEIGHBOR_TOP_N,
+    neighbor_distance_threshold: float | None = QUERY_NEIGHBOR_DISTANCE_THRESHOLD,
 ) -> List[Hit]:
     collection = get_or_create_chroma_collection()
     client = create_ollama_client()
@@ -76,18 +99,27 @@ async def get_query_hits(
     res: QueryResult = collection.query(
         query_embeddings=query_embedding,
         n_results=n_results,
-        include=["documents", "metadatas"],
+        include=["documents", "metadatas", "distances"],
     )
     docs = res["documents"]
     metas = res["metadatas"]
+    distances = res["distances"]
     if docs is None or metas is None:
         return []
     if len(docs) == 0 or len(metas) == 0:
         return []
     docs0 = docs[0]
     metas0 = metas[0]
+    distances0 = distances[0] if distances is not None and len(distances) > 0 else None
     hits = [create_hit(doc, metadata) for doc, metadata in zip(docs0, metas0)]
-    neighbor_ids = _get_neighbor_ids(hits[: max(neighbor_top_n, 0)])
+    neighbor_ids = _get_neighbor_ids(
+        _neighbor_seed_hits(
+            hits,
+            distances=distances0,
+            neighbor_top_n=neighbor_top_n,
+            neighbor_distance_threshold=neighbor_distance_threshold,
+        )
+    )
     if neighbor_ids:
         n_res: GetResult = collection.get(ids=list(neighbor_ids), include=["documents", "metadatas"])
         n_docs = n_res["documents"]

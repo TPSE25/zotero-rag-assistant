@@ -11,12 +11,11 @@ from typing import Any, List, Optional, Protocol
 from ollama import AsyncClient
 from pydantic import BaseModel, Field
 
+from core.settings import ANNOTATION_DEFAULT_CHUNK_SIZE, MAX_OLLAMA_PARALLEL_CALLS
 from features.annotations.pdf_text_recognition import Rect, TextPlaceRecognitionPDF
 from features.prompts.store import render_prompt
 
 logger = logging.getLogger(__name__)
-
-MAX_OLLAMA_PARALLEL_CALLS = 4
 
 
 class RuleLike(Protocol):
@@ -115,7 +114,7 @@ async def process_annotations(
     if progress_callback is not None:
         await progress_callback({"stage": "tokens_indexed", "tokens": len(all_tokens)})
 
-    resolved_chunk_size = chunk_size or 1600
+    resolved_chunk_size = chunk_size or ANNOTATION_DEFAULT_CHUNK_SIZE
     chunks = _create_chunks(all_tokens, chunk_size=resolved_chunk_size, overlap=150)
     if progress_callback is not None:
         await progress_callback({"stage": "chunking_done", "total_chunks": len(chunks)})

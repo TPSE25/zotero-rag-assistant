@@ -1,3 +1,22 @@
+## Install plugin
+### Create build file
+```bash
+cd zotero-plugin
+npm ci
+npm run build
+```
+You can then find the build file in zotero-plugin/.scaffold/build/rag-assistant.xpi 
+### VPN
+In order to be able to use the plugin, you must be approved by the administrators to use the VPN. Consult the installation guide for more information.
+### Install the plugin in Zotero
+- Navigate to tools/plugins in the menu bar of Zotero
+- Click the gear icon, then click the option "install plugin from file..." and select the build file
+- Open the Zotero Settings and go to Sync
+- Make sure you are logged in and then change "Sync attachment files in My Library using" to **WebDav**
+- Set the URL to http://192.168.2.252:8080/webdav and enter any username and password
+- Go to RAG Assistant and enter http://192.168.2.252:8080/ for the API base URL
+- Scroll to the bottom and click reload prompts
+
 ## Setup and run
 > **Note**: You need to have Docker **and the compose plugin** installed and running on your system.  
 > You can find the official installation guides here:

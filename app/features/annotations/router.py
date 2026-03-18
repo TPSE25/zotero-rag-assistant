@@ -74,24 +74,35 @@ async def annotations(
     config: str = Form(...),
     ollama_client: AsyncClient = Depends(create_ollama_client),
 ) -> StreamingResponse:
+    # Parse and validate configuration JSON into a typed config object
     cfg = RagPopupConfig.model_validate_json(config)
+
+    # Parse page range (e.g., "1-5") into usable format
     page_range = parse_page_range(cfg.pageRange)
 
+    # Helper: convert raw match dict into strongly typed RagPdfMatch
     def _to_rag_match(m: Dict[str, Any]) -> RagPdfMatch:
         return RagPdfMatch(
             id=cast(str, m["id"]),
             pageIndex=cast(int, m["page"]),
-            rects=normalize_rects(cast(list[tuple[float, float, float, float] | None], m["rects"])),
+            rects=normalize_rects(
+                cast(list[tuple[float, float, float, float] | None], m["rects"])
+            ),
             text=cast(str | None, m.get("text")),
         )
 
+    # Core computation function: runs LLM-based annotation pipeline
     async def _compute(
         pdf_path: str,
         progress_cb: AnnotationProgressCb,
         matches_cb: AnnotationMatchesCb,
     ) -> None:
         llm_debug: List[Dict[str, Any]] = []
+
+        # Notify that file upload stage is complete
         await progress_cb({"stage": "file_uploaded"})
+
+        # Run annotation pipeline using LLM
         await process_annotations_llm(
             pdf_path=pdf_path,
             rules=cfg.rules,
@@ -104,10 +115,13 @@ async def annotations(
             chunk_matches_callback=matches_cb,
         )
 
+    # If no rules provided → return immediately with "done"
     if not cfg.rules:
 
         async def empty_gen() -> AsyncIterator[str]:
-            yield ndjson_annotation(AnnotationUpdateProgressEvent(stage="done", completed=0, total=0))
+            yield ndjson_annotation(
+                AnnotationUpdateProgressEvent(stage="done", completed=0, total=0)
+            )
             yield ndjson_annotation(AnnotationDoneEvent())
 
         return StreamingResponse(
@@ -119,9 +133,11 @@ async def annotations(
             },
         )
 
+    # Save uploaded PDF to a temporary file
     tmp_path: str | None = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            # Stream file in chunks to avoid large memory usage
             while content := await file.read(1024 * 1024):
                 tmp.write(content)
             tmp_path = tmp.name
@@ -129,6 +145,7 @@ async def annotations(
         logging.error(f"Failed to persist uploaded PDF: {e}")
         error_message = f"Failed to read uploaded PDF: {e}"
 
+        # Return error as streaming response
         async def error_gen() -> AsyncIterator[str]:
             yield ndjson_annotation(ErrorEvent(message=error_message))
             yield ndjson_annotation(AnnotationDoneEvent())
@@ -142,10 +159,15 @@ async def annotations(
             },
         )
 
+    # Main streaming generator
     async def gen() -> AsyncIterator[str]:
+        # Queue used to communicate events between workers and stream
         queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        # Subscribe to concurrency tracker (for monitoring active requests)
         concurrency_queue = await ANNOTATION_CONCURRENCY_TRACKER.subscribe()
 
+        # Callback: sends progress updates into stream
         async def progress_cb(payload: Dict[str, Any]) -> None:
             yield_event = AnnotationUpdateProgressEvent(
                 stage=cast(str, payload.get("stage", "annotation_progress")),
@@ -160,52 +182,82 @@ async def annotations(
             )
             await queue.put(ndjson_annotation(yield_event))
 
+        # Callback: sends partial annotation matches
         async def matches_cb(partial: List[Dict[str, Any]]) -> None:
-            event = AnnotationMatchesEvent(matches=[_to_rag_match(m).model_dump() for m in partial])
+            event = AnnotationMatchesEvent(
+                matches=[_to_rag_match(m).model_dump() for m in partial]
+            )
             await queue.put(ndjson_annotation(event))
 
+        # Worker: streams concurrency updates continuously
         async def concurrency_worker() -> None:
             while True:
                 active_requests = await concurrency_queue.get()
                 event = AnnotationConcurrencyEvent(activeRequests=active_requests)
                 await queue.put(ndjson_annotation(event))
 
+        # Main worker: runs annotation pipeline
         async def worker() -> None:
             is_counted = False
             try:
+                # Increment active request counter
                 await ANNOTATION_CONCURRENCY_TRACKER.increment()
                 is_counted = True
+
                 if tmp_path is None:
                     raise RuntimeError("Temporary PDF path is missing")
-                await _compute(pdf_path=tmp_path, progress_cb=progress_cb, matches_cb=matches_cb)
+
+                # Run annotation computation
+                await _compute(
+                    pdf_path=tmp_path,
+                    progress_cb=progress_cb,
+                    matches_cb=matches_cb,
+                )
+
             except Exception as e:
                 logging.error(f"Error in annotations stream: {e}")
+                # Send error event to stream
                 await queue.put(ndjson_annotation(ErrorEvent(message=str(e))))
+
             finally:
+                # Decrement concurrency counter
                 if is_counted:
                     await ANNOTATION_CONCURRENCY_TRACKER.decrement()
+
+                # Clean up temporary file
                 if tmp_path and os.path.exists(tmp_path):
                     os.remove(tmp_path)
-                await queue.put(ndjson_annotation(AnnotationDoneEvent()))
-                await queue.put(None)
 
+                # Signal completion
+                await queue.put(ndjson_annotation(AnnotationDoneEvent()))
+                await queue.put(None)  # Sentinel to stop generator
+
+        # Start background tasks
         concurrency_task = asyncio.create_task(concurrency_worker())
         task = asyncio.create_task(worker())
+
         try:
+            # Continuously stream events from queue
             while True:
                 item = await queue.get()
                 if item is None:
                     break
                 yield item
         finally:
+            # Cleanup tasks on exit
             if not task.done():
                 task.cancel()
             if not concurrency_task.done():
                 concurrency_task.cancel()
+
+            # Unsubscribe from concurrency tracker
             await ANNOTATION_CONCURRENCY_TRACKER.unsubscribe(concurrency_queue)
+
+            # Suppress cancellation errors
             with contextlib.suppress(asyncio.CancelledError):
                 await concurrency_task
 
+    # Return streaming NDJSON response
     return StreamingResponse(
         gen(),
         media_type="application/x-ndjson",
